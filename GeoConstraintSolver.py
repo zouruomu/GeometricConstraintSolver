@@ -11,6 +11,8 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import matplotlib.colors as mcolors
 
+######################################## Geometric Objects: Abstract Superclass ########################################
+
 class GeometricObject:
     """Abstract superclass defining a generic 3D geometric object with location, rotation, and scale.
 
@@ -93,6 +95,8 @@ class GeometricObject:
             A color patch with label to be passed to legend handler. Also modifies the input argument ax.
         """
         raise NotImplementedError
+
+######################################### Geometric Objects: Concrete Objects ##########################################
 
 class Cuboid(GeometricObject):
     """A cuboid.
@@ -185,6 +189,8 @@ class Cuboid(GeometricObject):
         corners = corners + self.loc # translate
         return corners
 
+########################################### Constraints: Abstract Superclass ###########################################
+
 class ConstraintProposition:
     """Abstract superclass representing a proposition asserting the satisfaction of a constraint between given objects.
 
@@ -249,7 +255,9 @@ class ConstraintProposition:
         """
         raise NotImplementedError
 
-class IsAligned(ConstraintProposition):
+########################################## Constraints: Primitive Constraints ##########################################
+
+class AreTranslationallyAligned(ConstraintProposition):
     """A proposition that represents a notion of translational alignment between objects.
 
     NOTE: This constraint proposition is flexible-arity. It can be instantiated with any
@@ -260,9 +268,9 @@ class IsAligned(ConstraintProposition):
     self.location attriutes. The former represents the dimension along which alignment should be
     considered, and the latter represents which part of the objects one wants aligned (the
     left-most point? The center? Etc.). For example, if one wishes to articulate the constraint
-    that "the top-most points on the given objects are aligned", one would set dimension="Z"
+    that "the top-most points on the given objects are aligned", one would set dimension="z"
     and location="bounding_max". If one wants to have the objects with centers aligned on the
-    X-axis, one would set dimension="X" and location="center".
+    X-axis, one would set dimension="x" and location="center".
 
     Attributes:
         Superclass attributes.
@@ -312,7 +320,311 @@ class IsAligned(ConstraintProposition):
         # take the mean absolute deviation and output
         values_to_compare = np.array(values_to_compare)
         return np.abs(values_to_compare - values_to_compare.mean()).mean()
+
+class HaveTranslationalDifference_B(ConstraintProposition):
+    """A proposition that represents a notion of translational difference between TWO objects.
+
+    NOTE: This constraint proposition is binary ("_B"). This is because the notion of "difference" is
+          not readily extendable to multiple objects. If one wants to achieve the effect of having
+          two groups that are aligned within themselves and differ from each other by a certain amount,
+          use two AreTranslationallyAligned constraints within both groups and one HaveTranslationalDifference_B
+          constraint between two given objects one from each group.
+
+    Inherits from the Object abstract class. Translational difference is defined according to the
+    same self.dimension/self.location specification as the AreTranslationallyAligned constraint,
+    but only operates over two objects and allows the user to specify how far one wants the objects
+    apart with the self.target_difference attribute.
+
+    Attributes:
+        Superclass attributes.
+        target_difference: float, the target difference in the specified location between argument 1 and 2.
+        dimension: str, one of "x", "y", or "z", the dimension on which to assert alignment.
+        location: str, one of "bounding_min", "bounding_max", or "center", where to check alignment.
+    """
+    def __init__(self, arguments, target_difference, dimension, location):
+        """Init method."""
+        super().__init__(arguments)
+
+        # check to make sure dimension and location are valid
+        if dimension not in ["x", "y", "z"]:
+            raise ValueError(f"Argument 'dimension' must be one of 'x', 'y', or 'z'.")
+        if location not in ["bounding_min", "bounding_max", "center"]:
+            raise ValueError(f"Argument 'dimension' must be one of 'bounding_min', 'bounding_max', or 'center'.")
+
+        # store attributes
+        self.target_difference = target_difference
+        self.dimension = dimension
+        self.location = location
+
+    def define_arity(self):
+        """See superclass documentation for details."""
+        return 2 # binary
+
+    def badness(self):
+        """See superclass documentation for details.
+        
+        In this case, badness is calculated as the difference between the target and actual differences
+        between object 1 and object 2.
+        """
+        # convert str dimension to index
+        dim_idx = 0
+        if self.dimension == "x": dim_idx = 0
+        elif self.dimension == "y": dim_idx = 1
+        elif self.dimension == "z": dim_idx = 2
+
+        # get values to compare for both objects (binary so only two arguments)
+        values_to_compare = []
+        for argument in self.arguments:
+            if self.location == "bounding_min":
+                values_to_compare.append(argument.get_bounding_intervals()[dim_idx][0])
+            elif self.location == "bounding_max":
+                values_to_compare.append(argument.get_bounding_intervals()[dim_idx][1])
+            elif self.location == "center":
+                values_to_compare.append(argument.loc[dim_idx])
+
+        # take differences and output (binary so only two arguments)
+        actual_difference = values_to_compare[0] - values_to_compare[1]
+        return abs(self.target_difference - actual_difference)
+
+class AreRotationallyAligned(ConstraintProposition):
+    """A proposition that represents a notion of rotational alignment between objects.
+
+    NOTE: This constraint proposition is flexible-arity. It can be instantiated with any
+          number of arguments.
+
+    Inherits from the Object abstract class. Alignment is defined by the self.dimension attribute.
+    This constraint's badness is simply the mean absolute deivation of the angles (for specified
+    dimension) of all argument objects.
+
+    Attributes:
+        Superclass attributes.
+        dimension: str, one of "x", "y", or "z", the dimension on which to assert alignment.
+    """
+    def __init__(self, arguments, dimension):
+        """Init method."""
+        super().__init__(arguments)
+
+        # check to make sure dimension and location are valid
+        if dimension not in ["x", "y", "z"]:
+            raise ValueError(f"Argument 'dimension' must be one of 'x', 'y', or 'z'.")
+
+        # store attributes
+        self.dimension = dimension
+
+    def define_arity(self):
+        """See superclass documentation for details."""
+        return None # flexible-arity
+
+    def badness(self):
+        """See superclass documentation for details.
+        
+        In this case, badness is calculated as the mean absolute deviation between all objects
+        passed along the specified dimension.
+        """
+        # convert str dimension to index
+        dim_idx = 0
+        if self.dimension == "x": dim_idx = 0
+        elif self.dimension == "y": dim_idx = 1
+        elif self.dimension == "z": dim_idx = 2
+
+        # get values to compare for all objects
+        values_to_compare = []
+        for argument in self.arguments:
+            values_to_compare.append(argument.rot[dim_idx])
+
+        # take the mean absolute deviation and output
+        values_to_compare = np.array(values_to_compare)
+        return np.abs(values_to_compare - values_to_compare.mean()).mean()
+
+class HaveRotationalDifference_B(ConstraintProposition):
+    """A proposition that represents a notion of rotational difference between TWO objects.
+
+    NOTE: This constraint proposition is binary ("_B") for the same reason as HaveTranslationalDifference_B.
+
+    Inherits from the Object abstract class. Alignment is defined by the self.dimension attribute
+    but only operates over two objects and allows the user to specify how far one wants the objects
+    apart with the self.difference attribute.
+
+    Attributes:
+        Superclass attributes.
+        target_difference: float, the target difference in the specified location between argument 1 and 2.
+        dimension: str, one of "x", "y", or "z", the dimension on which to assert alignment.
+    """
+    def __init__(self, arguments, target_difference, dimension):
+        """Init method."""
+        super().__init__(arguments)
+
+        # check to make sure dimension and location are valid
+        if dimension not in ["x", "y", "z"]:
+            raise ValueError(f"Argument 'dimension' must be one of 'x', 'y', or 'z'.")
+
+        # store attributes
+        self.target_difference = target_difference
+        self.dimension = dimension
+
+    def define_arity(self):
+        """See superclass documentation for details."""
+        return 2 # binary
+
+    def badness(self):
+        """See superclass documentation for details.
+        
+        In this case, badness is calculated as the difference between the target and actual differences
+        between object 1 and object 2.
+        """
+        # convert str dimension to index
+        dim_idx = 0
+        if self.dimension == "x": dim_idx = 0
+        elif self.dimension == "y": dim_idx = 1
+        elif self.dimension == "z": dim_idx = 2
+
+        # get values to compare for all objects (binary so only two arguments)
+        values_to_compare = []
+        for argument in self.arguments:
+            values_to_compare.append(argument.rot[dim_idx])
+
+        # take differences and output (binary so only two arguments)
+        actual_difference = values_to_compare[0] - values_to_compare[1]
+        return abs(self.target_difference - actual_difference)
+
+class AreNotOverlapping_B(ConstraintProposition):
+    """A proposition that specifies that BOTH passed arguments must not overlap.
+
+    NOTE: This constraint proposition is binary ("_B").
+
+    Inherits from the Object abstract class. Overlapping is defined as having the bounding
+    boxes returned by the argument objects' get_bounding_intervals overlapping.
+
+    Attributes:
+        Superclass attributes.
+    """
+    def __init__(self, arguments):
+        """Init method."""
+        super().__init__(arguments)
+
+    def define_arity(self):
+        """See superclass documentation for details."""
+        return 2 # binary
+
+    def badness(self):
+        """See superclass documentation for details.
+        
+        In this case, badness is calculated as the overlap area if there is an overlap
+        and 0 if there is no overlap. The calculations are based on the principle that
+        2 axis-aligned boxes (bounding boxes are axis-aligned) overlap if and only if
+        the projections to all axes overlap.
+        """
+        # get bounding intervals (binary so only two arguments)
+        [xmin1, xmax1], [ymin1, ymax1], [zmin1, zmax1] = self.arguments[0].get_bounding_intervals()
+        [xmin2, xmax2], [ymin2, ymax2], [zmin2, zmax2] = self.arguments[1].get_bounding_intervals()
+
+        # For any axis, we have two bounding intervals for the two arguments, and there are six cases:
+        #     1. Interval 1 is strictly before interval 2.
+        #     2. Interval 2 is strictly before interval 1.
+        #     3. Intervals 1 and 2 overlap but one does not fully contain the other, interval 1 is first.
+        #     4. Intervals 1 and 2 overlap but one does not fully contain the other, interval 2 is first.
+        #     5. Intervals 1 and 2 overlap and interval 1 fully contains interval 2.
+        #     6. Intervals 1 and 2 overlap and interval 2 fully contains interval 1.
+        
+        # In cases 1 and 2, either (max1 - min2) OR (max2 - min1) will be negative/zero and overlap area is 0.
+        # In cases 3 and 4, both (max1 - min2) AND (max2 - min1) will be positive and overlap area is the min between them.
+        # In cases 5 and 6, both (max1 - min2) AND (max2 - min1) will be positive and overlap area is the shorter interval.
+
+        # HOWEVER, for cases 5 and 6, if we try to minimize the overlap area, for small steps in either
+        # direction, there will not be changes in the badness until the intervals are no longer overlapping.
+        # This makes minimizing the overlap area challenging. Therefore, for ease of optimization, it suffices
+        # to treat cases 5 & 6 the same as 3 & 4 and let the badness always be whichever one of (max1 - min2)
+        # and (max2 - min1) is smaller. In the one-interval-within-another situation of cases 5 and 6, this
+        # is equivalent to letting the algorithm push the inner interval in whichever direction is closest
+        # to the edge of the outer interval.
+        
+        if xmax1 - xmin2 <= 0 or xmax2 - xmin1 <= 0:
+            x_overlap = 0 # no overlap, cases 1 and 2
+        else:
+            x_overlap = min(xmax1 - xmin2, xmax2 - xmin1) # has overlap, cases 3 - 6
+
+        if ymax1 - ymin2 <= 0 or ymax2 - ymin1 <= 0:
+            y_overlap = 0 # no overlap, cases 1 and 2
+        else:
+            y_overlap = min(ymax1 - ymin2, ymax2 - ymin1) # has overlap, cases 3 - 6
+
+        if zmax1 - zmin2 <= 0 or zmax2 - zmin1 <= 0:
+            z_overlap = 0 # no overlap, cases 1 and 2
+        else:
+            z_overlap = min(zmax1 - zmin2, zmax2 - zmin1) # has overlap, cases 3 - 6
+
+        total_overlap = x_overlap * y_overlap * z_overlap
+        return total_overlap
+
+########################################## Constraints: Composite Constraints ##########################################
+
+class AreProximal(ConstraintProposition):
+    """A flexible-arity constraint that asserts that ALL passed objects must be as close as possible.
+    """
+    def __init__(self, arguments):
+        super().__init__(arguments)
+
+    def define_arity(self):
+        return None # flexible-arity
+
+    def badness(self):
+        res = (AreTranslationallyAligned(arguments=self.arguments, dimension="x", location="center").badness()
+               + AreTranslationallyAligned(arguments=self.arguments, dimension="y", location="center").badness()
+               + AreTranslationallyAligned(arguments=self.arguments, dimension="z", location="center").badness())
+        return res
+
+class AreIdenticallyPointed(ConstraintProposition):
+    """A flexible-arity constraint that asserts that ALL passed objects must have the same orientation.
+    """
+    def __init__(self, arguments):
+        super().__init__(arguments)
+
+    def define_arity(self):
+        return None # flexible-arity
+
+    def badness(self):
+        res = (AreRotationallyAligned(arguments=self.arguments, dimension="x").badness()
+               + AreRotationallyAligned(arguments=self.arguments, dimension="y").badness()
+               + AreRotationallyAligned(arguments=self.arguments, dimension="z").badness())
+        return res
+
+class ArePerpendicular_B(ConstraintProposition):
+    """A binary constraint that asserts that the TWO passed objects must be perpendicular on an axis.
+    """
+    def __init__(self, arguments, dimension):
+        super().__init__(arguments)
+        self.dimension = dimension
+
+    def define_arity(self):
+        return 2 # binary
+
+    def badness(self):
+        return HaveRotationalDifference_B(self.arguments, target_difference=90, dimension=self.dimension).badness()
+
+class AreNotOverlapping(ConstraintProposition):
+    """A flexible-arity constraint that asserts that no passed object must overlap.
     
+    NOTE: This constraint checks pairwise AreNotOverlapping_B for every object pair. It is
+          VERY slow as it evaluates num_arguments^2 constraints. Use multiple AreNotOverlapping_B
+          if possible.
+    """
+    def __init__(self, arguments):
+        super().__init__(arguments)
+
+    def define_arity(self):
+        return None # flexible-arity
+
+    def badness(self):
+        total_badness = 0
+        for i in self.arguments:
+            for j in self.arguments:
+                if i is j:
+                    continue
+                total_badness += AreNotOverlapping_B(arguments=(i,j)).badness()
+        return total_badness
+
+############################################# MAIN PROBLEM INTERFACE CLASS #############################################
+
 class Problem:
     """The primary way users interact with the constraint solver.
 
@@ -404,13 +716,13 @@ class Problem:
             object.set_optimizable_attr(flat_array[cur:cur+obj_len])
             cur = cur + obj_len
 
-    def solve(self):
+    def solve(self, verbose=False):
         """Tune the optimizable parameters of all optimizable objects to best satisfy constraint propositions.
     
         This is the main function of the solver. It modifies objects in place.
     
         Args:
-            None.
+            verbose: bool, whether or not to print full scipy.minimize results.
         Returns:
             None. Modifies self.optimizable_objects in-place.
         """
@@ -425,7 +737,12 @@ class Problem:
             return total_badness
 
         # compute solution, changing objects every iteration along the way
-        solution = basinhopping(objective, x0=self._flatten_optimizable_parameters(), niter=100)
+        # solution = minimize(objective, x0=self._flatten_optimizable_parameters(), method="Nelder-Mead")
+        solution = minimize(objective, x0=self._flatten_optimizable_parameters(), method="powell")
+
+        # optionally print full optimization results
+        if verbose:
+            print(solution)
 
         # set the objects to the final solution
         self._recover_optimizable_parameters(solution.x)
@@ -461,10 +778,11 @@ class Problem:
         ax.set_xlabel("x")
         ax.set_ylabel("y")
         ax.set_zlabel("z")
-        ax.legend(handles=legend_patchs)
-        ax.set_xlim(-fixed_axes,fixed_axes)
-        ax.set_ylim(-fixed_axes,fixed_axes)
-        ax.set_zlim(-fixed_axes,fixed_axes)
+        ax.legend(handles=legend_patchs, loc="upper right", bbox_to_anchor=(1.32,1))
+        if fixed_axes is not None:
+            ax.set_xlim(-fixed_axes,fixed_axes)
+            ax.set_ylim(-fixed_axes,fixed_axes)
+            ax.set_zlim(-fixed_axes,fixed_axes)
 
         #configure view
         ax.set_proj_type("persp",focal_length=0.2)
