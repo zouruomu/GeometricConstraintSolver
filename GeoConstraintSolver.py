@@ -21,7 +21,7 @@ class GeometricObject:
     """Abstract superclass defining a generic 3D geometric object with location, rotation, and scale.
 
     A GeometricObject is defined by its location in global cooridnates, rotation in Euler angles,
-    and scale (all objects share the same scale). For all objects, location and rotation are 
+    and scale (all objects share the same scale). For all objects, location and z-rotation are 
     treated as optimizable, and scale is treated as fixed. To define a specific type of geometric 
     object (see class Cuboid below), the methods get_bounding_intervals and add_self_to_axis must be
     implemented. Sub-classes may have additional attributes.
@@ -59,15 +59,16 @@ class GeometricObject:
     def get_optimizable_attr(self):
         """Get the attributes that can be optimized in the form of a flat np.array.
         
-        Generally, we assume location and rotation to be optimizable, and scale to be fixed.
+        Generally, we assume location and z-rotation to be optimizable, and scale to be fixed.
+        x and y rotation are assumed to be fixed.
         
         Args:
             None.
         Returns:
             A flat np.array with every optimizable attribute stacked together.
-            It looks like [loc_x,loc_y,loc_z,rot_x,rot_y,rot_z].
+            It looks like [loc_x,loc_y,loc_z,rot_z].
         """
-        return np.concatenate([self.loc, self.rot])
+        return np.concatenate([self.loc, self.rot[2:3]])
 
     def set_optimizable_attr(self, attr_array):
         """Set optimizable attributes with an np.array of the same form as one from get_optimizable_attr.
@@ -81,7 +82,7 @@ class GeometricObject:
             None. Modifies self.geometry.
         """
         self.loc = attr_array[:3]
-        self.rot = attr_array[3:]
+        self.rot[2] = attr_array[3]
 
     def get_bounding_intervals(self):
         """Get the largest and lowest coordinate values along each dimension of the object as intervals.
@@ -847,6 +848,58 @@ class AreBottomAligned_F(ConstraintProposition):
 
     def badness(self):
         return AreTranslationallyAligned_F(arguments=self.arguments, dimension="z",
+                                           location="bounding_min").badness()
+
+class AreXPlusAligned_F(ConstraintProposition):
+    """A flexible-arity ("_F") constraint asserting that ALL passed objects are aligned along the positive x axis.
+    """
+    def __init__(self, arguments):
+        super().__init__(arguments)
+
+    def define_arity(self):
+        return None # flexible-arity
+
+    def badness(self):
+        return AreTranslationallyAligned_F(arguments=self.arguments, dimension="x",
+                                           location="bounding_max").badness()
+
+class AreXMinusAligned_F(ConstraintProposition):
+    """A flexible-arity ("_F") constraint asserting that ALL passed objects are aligned along the negative x axis.
+    """
+    def __init__(self, arguments):
+        super().__init__(arguments)
+
+    def define_arity(self):
+        return None # flexible-arity
+
+    def badness(self):
+        return AreTranslationallyAligned_F(arguments=self.arguments, dimension="x",
+                                           location="bounding_min").badness()
+
+class AreYPlusAligned_F(ConstraintProposition):
+    """A flexible-arity ("_F") constraint asserting that ALL passed objects are aligned along the positive y axis.
+    """
+    def __init__(self, arguments):
+        super().__init__(arguments)
+
+    def define_arity(self):
+        return None # flexible-arity
+
+    def badness(self):
+        return AreTranslationallyAligned_F(arguments=self.arguments, dimension="y",
+                                           location="bounding_max").badness()
+
+class AreYMinusAligned_F(ConstraintProposition):
+    """A flexible-arity ("_F") constraint asserting that ALL passed objects are aligned along the negative y axis.
+    """
+    def __init__(self, arguments):
+        super().__init__(arguments)
+
+    def define_arity(self):
+        return None # flexible-arity
+
+    def badness(self):
+        return AreTranslationallyAligned_F(arguments=self.arguments, dimension="y",
                                            location="bounding_min").badness()
 
 class AreSymmetricalAround_T(ConstraintProposition):

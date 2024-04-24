@@ -26,6 +26,8 @@ def generate_data(data_directory, run_name, num_datapoints, axes_scale=10,
     "{run_name}.pkl" already exists, it will be overriden. Unpacking "{run_name}.pkl"
     will yield a list of dictionaries (each datapoint is represented as a dictionary).
 
+    NOTE: Current version of function only generates data where x and y rotation are both 0.
+
     Args:
         data_directory: str, directory in which to create a new folder to store generated data.
         run_name: str, the name of the pkl file to create will be "{run_name}.pkl".
@@ -62,14 +64,14 @@ def generate_data(data_directory, run_name, num_datapoints, axes_scale=10,
     object_coord_range = axes_scale - object_max_scale/2 # actual range is [-object_coord_range, object_coord_range]
     constraints = [IsUpright_U, IsAtOrigin_U, AreProximal_B, HaveSameRotation_F,
                    AreTopAligned_F, AreBottomAligned_F, AreSymmetricalAround_T,
-                   AreNotOverlapping_B, AreParallelX_B, AreParallelY_B, AreParallelZ_B,
-                   ArePerpendicularX_B, ArePerpendicularY_B, ArePerpendicularZ_B]
+                   AreNotOverlapping_B, AreParallelZ_B, ArePerpendicularZ_B,
+                   AreXPlusAligned_F, AreXMinusAligned_F, AreYPlusAligned_F, AreYMinusAligned_F]
     constraint_names = ["IsUpright", "IsAtOrigin", "AreProximal", "HaveSameRotation",
                         "AreTopAligned", "AreBottomAligned", "AreSymmetricalAround",
-                        "AreNotOverlapping", "AreParallelX", "AreParallelY", "AreParallelZ",
-                        "ArePerpendicularX", "ArePerpendicularY", "ArePerpendicularZ"]
-    constraint_arities = [1, 1, 2, None, None, None, 3, 2, 2, 2, 2, 2, 2, 2]
-    constraint_weights = np.array([0.5, 0.5, 2, 1, 0.5, 0.5, 1, 2, 0.33, 0.33, 0.33, 0.33, 0.33, 0.33])
+                        "AreNotOverlapping", "AreParallelZ", "ArePerpendicularZ",
+                        "AreXPlusAligned", "AreXMinusAligned", "AreYPlusAligned", "AreYMinusAligned"]
+    constraint_arities = [1, 1, 2, None, None, None, 3, 2, 2, 2, None, None, None, None]
+    constraint_weights = np.array([0.5, 0.5, 2, 1, 1, 1, 1, 2, 1, 1, 0.5, 0.5, 0.5, 0.5])
     constraint_weights = constraint_weights / constraint_weights.sum()
 
     # optionally setup folder to save figures in
@@ -94,13 +96,13 @@ def generate_data(data_directory, run_name, num_datapoints, axes_scale=10,
         num_objs = np.random.randint(low=min_object_count, high=max_object_count+1)
         num_constraints = np.random.randint(low=min_constraint_count, high=max_constraint_count+1)  
 
-        # create the objects (random initialization, 70% the objects will be aligned with coordinate axes)
+        # create the objects (random initialization, 50% of objects will be upright)
         objs = []
         obj_names = []
         for i in range(1,num_objs+1):
             #create random object
             obj = Cuboid(loc=np.random.uniform(low=-object_coord_range ,high=object_coord_range, size=(3)),
-                         rot=[0,0,0] if np.random.uniform() < 0.7 else np.random.uniform(low=0, high=360, size=(3)),
+                         rot=[0,0,0 if np.random.uniform() < 0.5 else np.random.uniform(low=0, high=360)],
                          scale=np.random.uniform(low=object_min_scale ,high=object_max_scale, size=(3)))
             # name and add to lists and problem
             obj_name = f"Cube{i}"
@@ -133,7 +135,7 @@ def generate_data(data_directory, run_name, num_datapoints, axes_scale=10,
             constraint_arg_idx = np.random.choice(a=num_objs, size=constraint_arity, replace=False)
             constraint_args = objs[constraint_arg_idx]
             constraint_arg_names = obj_names[constraint_arg_idx]
-            constraint_weight = np.round(np.random.uniform(), 2) # random weight
+            constraint_weight = np.random.choice([0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.0]) # random weight
 
             # add to problem, constraints_output, and optionally update description
             problem.add_constraint_proposition(constraint(arguments=constraint_args),
@@ -173,8 +175,14 @@ def generate_data(data_directory, run_name, num_datapoints, axes_scale=10,
     with open(pkl_path, "wb") as f:
         pickle.dump(dataset, f)
 
-# generate_data(data_directory="./GeneratedData", run_name="Dataset8000",
-#               num_datapoints=8000, axes_scale=10,
+generate_data(data_directory="./GeneratedData", run_name="Dataset8000",
+              num_datapoints=8000, axes_scale=10,
+              min_object_count=3, max_object_count=10,
+              min_constraint_count=5, max_constraint_count=15,
+              save_visualizations=True)
+
+# generate_data(data_directory="./GeneratedData", run_name="Dataset2",
+#               num_datapoints=2, axes_scale=10,
 #               min_object_count=3, max_object_count=10,
 #               min_constraint_count=5, max_constraint_count=15,
-#               save_visualizations=True);
+#               save_visualizations=True)

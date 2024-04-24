@@ -26,12 +26,12 @@ def evaluate(objs_dict_list, constraints_dict_list):
         "AreBottomAligned":AreBottomAligned_F,
         "AreSymmetricalAround":AreSymmetricalAround_T,
         "AreNotOverlapping":AreNotOverlapping_B,
-        "AreParallelX":AreParallelX_B,
-        "AreParallelY":AreParallelY_B,
         "AreParallelZ":AreParallelZ_B,
-        "ArePerpendicularX":ArePerpendicularX_B,
-        "ArePerpendicularY":ArePerpendicularY_B,
-        "ArePerpendicularZ":ArePerpendicularZ_B
+        "ArePerpendicularZ":ArePerpendicularZ_B,
+        "AreXPlusAligned":AreXPlusAligned_F,
+        "AreXMinusAligned":AreXMinusAligned_F,
+        "AreYPlusAligned":AreYPlusAligned_F,
+        "AreYMinusAligned":AreYMinusAligned_F
     }
     def dict_to_obj(dict):
         name = dict["name"]
