@@ -1,3 +1,4 @@
+import os
 import warnings
 warnings.filterwarnings('ignore')
 from itertools import product, combinations
@@ -10,6 +11,9 @@ matplotlib.rcParams['figure.dpi'] = 140
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import matplotlib.colors as mcolors
+from tqdm import tqdm
+import shutil
+import pickle
 
 ######################################## Geometric Objects: Abstract Superclass ########################################
 
@@ -40,6 +44,17 @@ class GeometricObject:
         self.loc = np.array(loc)
         self.rot = np.array(rot)
         self.scale = np.array(scale)
+
+    def get_all_attr(self):
+        """Get all attributes in the form of a flat np.array.
+        
+        Args:
+            None.
+        Returns:
+            A flat np.array with every optimizable attribute stacked together.
+            It looks like [loc_x,loc_y,loc_z,rot_x,rot_y,rot_z,scale_x,scale_y,scale_z].
+        """
+        return np.concatenate([self.loc, self.rot, self.scale])
 
     def get_optimizable_attr(self):
         """Get the attributes that can be optimized in the form of a flat np.array.
@@ -257,7 +272,48 @@ class ConstraintProposition:
 
 ########################################## Constraints: Primitive Constraints ##########################################
 
-class AreTranslationallyAligned(ConstraintProposition):
+class HasLocation_U(ConstraintProposition):
+    """A proposition that asserts that an object has a fixed location.
+
+    NOTE: This constraint proposition is unary ("_U").
+
+    Inherits from the Object abstract class. The target location this constraint proposition
+    asserts the object to have is defined by a 3-element list or list-like such as [10,5,None].
+    The first element is assumed to be for the x dimension, the second for the y, and the third
+    for the z. If any of the entries are None, then that dimension is not constrained.
+
+    Attribtues:
+        Superclass attributes.
+        target_loc: list of 3 elements of form [x,y,z].
+    """
+    def __init__(self, arguments, target_loc):
+        """Init method."""
+        super().__init__(arguments)
+
+        # check to make sure target_loc is valid and store
+        if len(target_loc) != 3:
+            raise ValueError(f"Argument 'target_loc' must have length 3.")
+        self.target_loc = target_loc
+
+    def define_arity(self):
+        """See superclass documentation for details."""
+        return 1 # unary
+
+    def badness(self):
+        """See superclass documentation for details.
+        
+        In this case, badness is calculated as how far the the current location is
+        from the target location. If any dimension of self.target_loc is None, that
+        dimension is not factored into the calculations.
+        """
+        loc = self.arguments[0].loc # unary
+        total_badness = 0
+        if self.target_loc[0] is not None: total_badness += abs(self.target_loc[0] - loc[0])
+        if self.target_loc[1] is not None: total_badness += abs(self.target_loc[1] - loc[1])
+        if self.target_loc[2] is not None: total_badness += abs(self.target_loc[2] - loc[2])
+        return total_badness
+
+class AreTranslationallyAligned_F(ConstraintProposition):
     """A proposition that represents a notion of translational alignment between objects.
 
     NOTE: This constraint proposition is flexible-arity. It can be instantiated with any
@@ -386,7 +442,48 @@ class HaveTranslationalDifference_B(ConstraintProposition):
         actual_difference = values_to_compare[0] - values_to_compare[1]
         return abs(self.target_difference - actual_difference)
 
-class AreRotationallyAligned(ConstraintProposition):
+class HasRotation_U(ConstraintProposition):
+    """A proposition that asserts that an object has a fixed rotation.
+
+    NOTE: This constraint proposition is unary ("_U").
+
+    Inherits from the Object abstract class. The target rotation this constraint proposition
+    asserts the object to have is defined by a 3-element list or list-like such as [30,None,45].
+    The first element is assumed to be for the x dimension, the second for the y, and the third
+    for the z. If any of the entries are None, then that dimension is not constrained.
+
+    Attribtues:
+        Superclass attributes.
+        target_rot: list of 3 elements of form [x,y,z].
+    """
+    def __init__(self, arguments, target_rot):
+        """Init method."""
+        super().__init__(arguments)
+
+        # check to make sure target_rot is valid and store
+        if len(target_rot) != 3:
+            raise ValueError(f"Argument 'target_rot' must have length 3.")
+        self.target_rot = target_rot
+
+    def define_arity(self):
+        """See superclass documentation for details."""
+        return 1 # unary
+
+    def badness(self):
+        """See superclass documentation for details.
+        
+        In this case, badness is calculated as how far the the current rotation is
+        from the target rotation. If any dimension of self.target_rot is None, that
+        dimension is not factored into the calculations.
+        """
+        rot = self.arguments[0].rot # unary
+        total_badness = 0
+        if self.target_rot[0] is not None: total_badness += abs(self.target_rot[0] - rot[0])
+        if self.target_rot[1] is not None: total_badness += abs(self.target_rot[1] - rot[1])
+        if self.target_rot[2] is not None: total_badness += abs(self.target_rot[2] - rot[2])
+        return total_badness
+
+class AreRotationallyAligned_F(ConstraintProposition):
     """A proposition that represents a notion of rotational alignment between objects.
 
     NOTE: This constraint proposition is flexible-arity. It can be instantiated with any
@@ -441,9 +538,10 @@ class HaveRotationalDifference_B(ConstraintProposition):
 
     NOTE: This constraint proposition is binary ("_B") for the same reason as HaveTranslationalDifference_B.
 
-    Inherits from the Object abstract class. Alignment is defined by the self.dimension attribute
+    Inherits from the Object abstract class. Difference is defined by the self.dimension attribute
     but only operates over two objects and allows the user to specify how far one wants the objects
-    apart with the self.difference attribute.
+    pointed apart with the self.difference attribute. Difference is calculated as obj1 - obj2, so
+    to assert that 
 
     Attributes:
         Superclass attributes.
@@ -486,6 +584,120 @@ class HaveRotationalDifference_B(ConstraintProposition):
         # take differences and output (binary so only two arguments)
         actual_difference = values_to_compare[0] - values_to_compare[1]
         return abs(self.target_difference - actual_difference)
+
+class HaveDistanceBetween_B(ConstraintProposition):
+    """A proposition that specifies that the TWO passed arguments must have a certain distance between them.
+
+    NOTE: This constraint proposition is binary ("_B").
+
+    Inherits from the Object abstract class. Distance between is defined as the euclidean distance between
+    the pass objects.
+
+    Attributes:
+        Superclass attributes.
+        target_distance: positive float, the target distance between the two objects.
+    """
+    def __init__(self, arguments, target_distance):
+        """Init method."""
+        super().__init__(arguments)
+
+        # check to make sure target_distance is valid and store
+        if target_distance < 0:
+            raise ValueError(f"Argument 'target_distance' must be >= 0.")
+        self.target_distance = target_distance
+
+    def define_arity(self):
+        """See superclass documentation for details."""
+        return 2 # binary
+
+    def badness(self):
+        """See superclass documentation for details.
+        
+        In this case, badness is calculated as the abs value between the actual distance and target distance.
+        """
+        actual_distance = np.linalg.norm(self.arguments[0].loc - self.arguments[1].loc)
+        return np.abs(self.target_distance - actual_distance)
+
+class IsPointingTowards_U(ConstraintProposition):
+    """A proposition that specifies that the ONE passed argument must point towards a point.
+
+    NOTE: This constraint proposition is unary ("_U").
+
+    Inherits from the Object abstract class. Pointing toward a point is defined as having
+    the argument object's local x-axis have the same angle as the displacement vector from
+    the argument object's location to the target point.
+
+    Attributes:
+        Superclass attributes.
+        target_point: a list of form [x,y,z] specifying the point to look at.
+    """
+    def __init__(self, arguments, target_point):
+        """Init method."""
+        super().__init__(arguments)
+
+        # check to make sure target_point is valid and store
+        if len(target_point) != 3:
+            raise ValueError(f"Argument 'target_point' must have length 3.")
+        self.target_point = target_point
+
+    def define_arity(self):
+        """See superclass documentation for details."""
+        return 1 # unary
+
+    def badness(self):
+        """See superclass documentation for details.
+        
+        In this case, badness is calculated as 1 - cosine(local_x_axis, displacement)
+        where displacement is the vector from the object to the target point.
+        """
+        # get displacement
+        displacement = np.array(self.target_point) - self.arguments[0].loc
+        displacement_magnitude = np.linalg.norm(displacement)
+
+        # get local x-axis
+        global_x_axis = np.array([1,0,0]) # magnitude 1
+        rotation_matrix = R.from_euler(angles=self.arguments[0].rot,
+                                       seq="xyz", degrees=True).as_matrix()
+        local_x_axis = global_x_axis @ rotation_matrix
+
+        # compute cosine of angle between them with law of cosines
+        cosine = np.dot(displacement, local_x_axis) / displacement_magnitude # local_x_axis is unit vector
+        return 1 - cosine
+
+class AreSymmetrical_B(ConstraintProposition):
+    """A proposition that specifies that the TWO passed arguments must be symmetrical around a point.
+
+    NOTE: This constraint proposition is binary ("_B").
+
+    Inherits from the Object abstract class. Symmetry around a point is defined as having the vector
+    from argument_1 to the point be the opposite of the one from argument_2 to the point.
+
+    Attributes:
+        Superclass attributes.
+        point: a list of form [x,y,z] specifying the point around which the arguments are symmetrical.
+    """
+    def __init__(self, arguments, point):
+        """Init method."""
+        super().__init__(arguments)
+
+        # check to make sure point is valid and store
+        if len(point) != 3:
+            raise ValueError(f"Argument 'point' must have length 3.")
+        self.point = point
+
+    def define_arity(self):
+        """See superclass documentation for details."""
+        return 2 # binary
+
+    def badness(self):
+        """See superclass documentation for details.
+        
+        In this case, badness is calculated as the l1 distance from the sum of the two displacement
+        vectors to the zero vector.
+        """
+        dis1 = np.array(self.point) - self.arguments[0].loc
+        dis2 = np.array(self.point) - self.arguments[1].loc
+        return np.abs(dis1 + dis2).sum()
 
 class AreNotOverlapping_B(ConstraintProposition):
     """A proposition that specifies that BOTH passed arguments must not overlap.
@@ -558,55 +770,46 @@ class AreNotOverlapping_B(ConstraintProposition):
 
 ########################################## Constraints: Composite Constraints ##########################################
 
-class AreProximal(ConstraintProposition):
-    """A flexible-arity constraint that asserts that ALL passed objects must be as close as possible.
+class IsUpright_U(ConstraintProposition):
+    """A unary ("_U") constraint asserting that the passed argument has rotation [0,0,0].
     """
     def __init__(self, arguments):
         super().__init__(arguments)
 
     def define_arity(self):
-        return None # flexible-arity
+        return 1 # unary
 
     def badness(self):
-        res = (AreTranslationallyAligned(arguments=self.arguments, dimension="x", location="center").badness()
-               + AreTranslationallyAligned(arguments=self.arguments, dimension="y", location="center").badness()
-               + AreTranslationallyAligned(arguments=self.arguments, dimension="z", location="center").badness())
-        return res
+        return HasRotation_U(arguments=self.arguments, target_rot=[0,0,0]).badness()
 
-class AreIdenticallyPointed(ConstraintProposition):
-    """A flexible-arity constraint that asserts that ALL passed objects must have the same orientation.
+class IsAtOrigin_U(ConstraintProposition):
+    """A unary ("_U") constraint asserting that the passed argument has location [0,0,0].
     """
     def __init__(self, arguments):
         super().__init__(arguments)
 
     def define_arity(self):
-        return None # flexible-arity
+        return 1 # unary
 
     def badness(self):
-        res = (AreRotationallyAligned(arguments=self.arguments, dimension="x").badness()
-               + AreRotationallyAligned(arguments=self.arguments, dimension="y").badness()
-               + AreRotationallyAligned(arguments=self.arguments, dimension="z").badness())
-        return res
+        return HasLocation_U(arguments=self.arguments, target_loc=[0,0,0]).badness()
 
-class ArePerpendicular_B(ConstraintProposition):
-    """A binary constraint that asserts that the TWO passed objects must be perpendicular on an axis.
+class AreProximal_B(ConstraintProposition):
+    """A binary ("_B") constraint asserting that the TWO passed objects are close but not overlapping.
     """
-    def __init__(self, arguments, dimension):
+    def __init__(self, arguments):
         super().__init__(arguments)
-        self.dimension = dimension
 
     def define_arity(self):
         return 2 # binary
 
     def badness(self):
-        return HaveRotationalDifference_B(self.arguments, target_difference=90, dimension=self.dimension).badness()
+        res = (HaveDistanceBetween_B(arguments=self.arguments, target_distance=0).badness()
+               + AreNotOverlapping_B(arguments=self.arguments).badness())
+        return res
 
-class AreNotOverlapping(ConstraintProposition):
-    """A flexible-arity constraint that asserts that no passed object must overlap.
-    
-    NOTE: This constraint checks pairwise AreNotOverlapping_B for every object pair. It is
-          VERY slow as it evaluates num_arguments^2 constraints. Use multiple AreNotOverlapping_B
-          if possible.
+class HaveSameRotation_F(ConstraintProposition):
+    """A flexible-arity ("_F") constraint asserting that ALL passed objects must have the same orientation.
     """
     def __init__(self, arguments):
         super().__init__(arguments)
@@ -615,13 +818,127 @@ class AreNotOverlapping(ConstraintProposition):
         return None # flexible-arity
 
     def badness(self):
-        total_badness = 0
-        for i in self.arguments:
-            for j in self.arguments:
-                if i is j:
-                    continue
-                total_badness += AreNotOverlapping_B(arguments=(i,j)).badness()
-        return total_badness
+        res = (AreRotationallyAligned_F(arguments=self.arguments, dimension="x").badness()
+               + AreRotationallyAligned_F(arguments=self.arguments, dimension="y").badness()
+               + AreRotationallyAligned_F(arguments=self.arguments, dimension="z").badness())
+        return res
+
+class AreTopAligned_F(ConstraintProposition):
+    """A flexible-arity ("_F") constraint asserting that ALL passed objects are top-aligned along the z axis.
+    """
+    def __init__(self, arguments):
+        super().__init__(arguments)
+
+    def define_arity(self):
+        return None # flexible-arity
+
+    def badness(self):
+        return AreTranslationallyAligned_F(arguments=self.arguments, dimension="z",
+                                           location="bounding_max").badness()
+
+class AreBottomAligned_F(ConstraintProposition):
+    """A flexible-arity ("_F") constraint asserting that ALL passed objects are bottom-aligned along the z axis.
+    """
+    def __init__(self, arguments):
+        super().__init__(arguments)
+
+    def define_arity(self):
+        return None # flexible-arity
+
+    def badness(self):
+        return AreTranslationallyAligned_F(arguments=self.arguments, dimension="z",
+                                           location="bounding_min").badness()
+
+class AreSymmetricalAround_T(ConstraintProposition):
+    """A ternary ("_T") constraint asserting that the passed objects must look like:
+    argument_0   <---equal--->   argument_1   <---equal--->   argument_2
+    """
+    def __init__(self, arguments):
+        super().__init__(arguments)
+
+    def define_arity(self):
+        return 3 # ternary
+
+    def badness(self):
+        return AreSymmetrical_B(arguments=[self.arguments[0],self.arguments[2]],
+                                point=self.arguments[1].loc).badness()
+
+# overlap defined above in primitive constraints
+
+class AreParallelX_B(ConstraintProposition):
+    """A binary ("_B") constraint asserting that the TWO passed objects must be parallel in x-rotation.
+    """
+    def __init__(self, arguments):
+        super().__init__(arguments)
+
+    def define_arity(self):
+        return 2 # binary
+
+    def badness(self):
+        return AreRotationallyAligned_F(arguments=self.arguments, dimension="x").badness()
+
+class AreParallelY_B(ConstraintProposition):
+    """A binary ("_B") constraint asserting that the TWO passed objects must be parallel in y-rotation.
+    """
+    def __init__(self, arguments):
+        super().__init__(arguments)
+
+    def define_arity(self):
+        return 2 # binary
+
+    def badness(self):
+        return AreRotationallyAligned_F(arguments=self.arguments, dimension="y").badness()
+
+class AreParallelZ_B(ConstraintProposition):
+    """A binary ("_B") constraint asserting that the TWO passed objects must be parallel in z-rotation.
+    """
+    def __init__(self, arguments):
+        super().__init__(arguments)
+
+    def define_arity(self):
+        return 2 # binary
+
+    def badness(self):
+        return AreRotationallyAligned_F(arguments=self.arguments, dimension="z").badness()
+
+class ArePerpendicularX_B(ConstraintProposition):
+    """A binary ("_B") constraint asserting that the TWO passed objects must be perpendicular in x-rotation.
+    """
+    def __init__(self, arguments):
+        super().__init__(arguments)
+
+    def define_arity(self):
+        return 2 # binary
+
+    def badness(self):
+        return HaveRotationalDifference_B(self.arguments, target_difference=90,
+                                          dimension="x").badness()
+
+class ArePerpendicularY_B(ConstraintProposition):
+    """A binary ("_B") constraint asserting that the TWO passed objects must be perpendicular in y-rotation.
+    """
+    def __init__(self, arguments):
+        super().__init__(arguments)
+
+    def define_arity(self):
+        return 2 # binary
+
+    def badness(self):
+        return HaveRotationalDifference_B(self.arguments, target_difference=90,
+                                          dimension="y").badness()
+
+class ArePerpendicularZ_B(ConstraintProposition):
+    """A binary ("_B") constraint asserting that the TWO passed objects must be perpendicular in z-rotation.
+    """
+    def __init__(self, arguments):
+        super().__init__(arguments)
+
+    def define_arity(self):
+        return 2 # binary
+
+    def badness(self):
+        return HaveRotationalDifference_B(self.arguments, target_difference=90,
+                                          dimension="z").badness()
 
 ############################################# MAIN PROBLEM INTERFACE CLASS #############################################
 
@@ -747,21 +1064,19 @@ class Problem:
         # set the objects to the final solution
         self._recover_optimizable_parameters(solution.x)
 
-    def plot(self, fixed_axes=None, elev=30, azim=40):
-        """Plot the problem with all optimizable objects shown.
+    def plot_on_ax(self, ax, ax_title, fixed_axes=None, elev=30, azim=40):
+        """Plot the problem with all optimizable objects on axis ax.
 
         This generates a 3D plot.
 
         Args:
+            ax: matplotlib axes to plot on.
+            ax_title: str, title of axes.
             fixed_axes: If not None, all x/y/z-lims will be set to (-fixed_axes,fixed_axes).
             elev, azim: matplotlib 3D plot viewing angle.
         Returns:
-            None. Shows the plot.
+            None. Modifies argument ax.
         """
-        # create figure
-        fig = plt.figure()
-        ax = fig.add_subplot(projection="3d")
-
         # define colors
         colors = list(mcolors.TABLEAU_COLORS.keys())
 
@@ -774,7 +1089,7 @@ class Problem:
             color_idx = color_idx % len(colors)
 
         # configure plot info
-        ax.set_title("All Optimizable Objects in Problem")
+        ax.set_title(ax_title, y=0.95)
         ax.set_xlabel("x")
         ax.set_ylabel("y")
         ax.set_zlabel("z")
@@ -787,4 +1102,3 @@ class Problem:
         #configure view
         ax.set_proj_type("persp",focal_length=0.2)
         ax.view_init(elev=elev,azim=azim)
-        plt.show()
