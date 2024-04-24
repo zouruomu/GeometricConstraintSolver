@@ -181,7 +181,7 @@ generate_data(data_directory="./GeneratedData", run_name="Dataset8000",
               num_datapoints=8000, axes_scale=10,
               min_object_count=3, max_object_count=10,
               min_constraint_count=5, max_constraint_count=15,
-              save_visualizations=True)
+              save_visualizations=False)
 
 # generate_data(data_directory="./GeneratedData", run_name="Dataset2",
 #               num_datapoints=2, axes_scale=10,
