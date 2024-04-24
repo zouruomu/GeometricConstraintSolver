@@ -71,7 +71,7 @@ def generate_data(data_directory, run_name, num_datapoints, axes_scale=10,
                         "AreNotOverlapping", "AreParallelZ", "ArePerpendicularZ",
                         "AreXPlusAligned", "AreXMinusAligned", "AreYPlusAligned", "AreYMinusAligned"]
     constraint_arities = [1, 1, 2, None, None, None, 3, 2, 2, 2, None, None, None, None]
-    constraint_weights = np.array([0.5, 0.5, 2, 1, 1, 1, 1, 2, 1, 1, 0.5, 0.5, 0.5, 0.5])
+    constraint_weights = np.array([1, 1, 2, 1, 1, 1, 1, 2, 1, 1, 0.5, 0.5, 0.5, 0.5])
     constraint_weights = constraint_weights / constraint_weights.sum()
 
     # optionally setup folder to save figures in
@@ -102,7 +102,7 @@ def generate_data(data_directory, run_name, num_datapoints, axes_scale=10,
         for i in range(1,num_objs+1):
             #create random object
             obj = Cuboid(loc=np.random.uniform(low=-object_coord_range ,high=object_coord_range, size=(3)),
-                         rot=[0,0,0 if np.random.uniform() < 0.5 else np.random.uniform(low=0, high=360)],
+                         rot=[0,0,0 if np.random.uniform() < 0.5 else np.random.uniform(low=-180, high=180)],
                          scale=np.random.uniform(low=object_min_scale ,high=object_max_scale, size=(3)))
             # name and add to lists and problem
             obj_name = f"Cube{i}"
@@ -149,8 +149,10 @@ def generate_data(data_directory, run_name, num_datapoints, axes_scale=10,
         # solve the problem
         problem.solve()
 
-        # add the solved objects to solved_objects_output
+        # re-cast z-rotation to (-180,180) add the solved objects to solved_objects_output
         for i in range(num_objs):
+            modded = objs[i].loc[2] % 360 # cast to (0,360)
+            objs[i].loc[2] = modded if modded <= 180 else modded - 360
             solved_objects_output.append(obj_to_dict(objs[i], obj_names[i]))
 
         # optionally plot the final state and save figure
