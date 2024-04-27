@@ -53,7 +53,7 @@ class GeometricObject:
             A flat np.array with every optimizable attribute stacked together.
             It looks like [loc_x,loc_y,loc_z,rot_z].
         """
-        return np.concatenate([self.loc, self.rot[2:3]])
+        return np.concatenate([self.loc[:2], self.rot[2:3]])
 
     def set_optimizable_attr(self, attr_array):
         """Set optimizable attributes with an np.array of the same form as one from get_optimizable_attr.
@@ -66,8 +66,8 @@ class GeometricObject:
         Returns:
             None. Modifies self.geometry.
         """
-        self.loc = attr_array[:3]
-        self.rot[2] = attr_array[3]
+        self.loc = attr_array[:2]
+        self.rot[2] = attr_array[2]
 
     def get_bounding_intervals(self):
         """Get the largest and lowest coordinate values along each dimension of the object as intervals.
