@@ -1,3 +1,9 @@
+from ..geometry import Cuboid
+from typing import Iterable
+
+GeometricObject = Cuboid
+
+
 class ConstraintProposition:
     """Abstract superclass representing a proposition asserting the satisfaction of a constraint between given objects.
 
@@ -13,7 +19,7 @@ class ConstraintProposition:
         arity: int or None, the arity of this proposition. None denotes flexible arity.
         arguments: list (length equals arity) of objects of class GeometricObject, the arguments to constrain.
     """
-    def __init__(self, arguments):
+    def __init__(self, arguments: Iterable[GeometricObject]):
         """Init method.
         
         Args: 
@@ -23,17 +29,16 @@ class ConstraintProposition:
         Raises:
             ValueError if there is an arity mismatch.
         """
-        self.arity = self.define_arity() # get the arity
-        arguments = list(arguments) # ensure arguments is a list
-
+        arguments = list(arguments)
         # check to make sure list has correct arity
         if self.arity is not None and len(arguments) != self.arity:
-            raise ValueError(f"Input arguments has arity {len(arguments)}, but constraint was defined with arity {self.arity}.")
+            raise ValueError(f"Input args has arity {len(arguments)}, but constraint was defined with arity {self.arity}.")
 
         # if it does, store as attribute
         self.arguments = arguments
 
-    def define_arity(self):
+    @property
+    def arity(self):
         """Define the arity of the constraint proposition, i.e. length of self.arguments.
 
         THIS METHOD SHOULD RETURN EITHER AN INTEGER OR NONE. NONE denotes flexible
