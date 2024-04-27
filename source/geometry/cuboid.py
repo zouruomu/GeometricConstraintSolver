@@ -2,8 +2,40 @@ import numpy as np
 from itertools import product
 import matplotlib.patches as mpatches
 from scipy.spatial.transform import Rotation as R
+import shapely
 
 from .geometric_object import GeometricObject
+
+
+class RotatedRect:
+    def __init__(self, cx, cy, w, h, angle, use_radians=True):
+        self.cx = cx
+        self.cy = cy
+        self.w = w
+        self.h = h
+        #NOTE: angle is in radians!
+        self.angle = angle
+        self.use_radians = use_radians
+
+    def get_contour(self):
+        w = self.w
+        h = self.h
+        c = shapely.geometry.box(-w/2.0, -h/2.0, w/2.0, h/2.0)
+        rc = shapely.affinity.rotate(c, self.angle, use_radians=self.use_radians)
+        return shapely.affinity.translate(rc, self.cx, self.cy)
+
+    def intersection(self, other):
+        return self.get_contour().intersection(other.get_contour())
+    
+    def distance(self, other):
+        return shapely.distance(self.get_contour(), other.get_contour())
+
+    @property
+    def area(self):
+        return self.get_contour().area
+    
+    def __repr__(self):
+        return f"RotatedRect(cx={self.cx}, cy={self.cy}, w={self.w}, h={self.h}, angle={self.angle})"
 
 
 class Cuboid(GeometricObject):
@@ -96,5 +128,14 @@ class Cuboid(GeometricObject):
         corners = corners @ rotation_matrix # rotate
         corners = corners + self.loc # translate
         return corners
+    
+    def to_2d_rect(self) -> RotatedRect:
+        cx, cy = self.loc[:2]
+        w, h = self.scale[:2]
+
+        angle = self.rot[-1]
+
+        return RotatedRect(cx, cy, w, h, angle, use_radians=False)
 
 ########################################### Constraints: Abstract Superclass ###########################################
+
