@@ -1,6 +1,9 @@
 from .constraint import ConstraintProposition
 
 class Proximity(ConstraintProposition):
+    """
+    NOTE: Currently it is only defined for 2D objects.
+    """
     @property
     def arity(self):
         return 2 # binary
