@@ -179,7 +179,9 @@ def generate_data(data_directory, run_name, num_datapoints,
         datapoint = {
             "initial_objects":initial_objs_output,
             "constraints":constraints_output,
-            "solved_objects":solved_objects_output
+            "solved_objects":solved_objects_output,
+            "scene_x_bounds": (scene_xmin-object_max_scale, scene_xmax+object_max_scale),
+            "scene_y_bounds": (scene_ymin-object_max_scale, scene_ymax+object_max_scale)
         }
         dataset.append(datapoint)
 
