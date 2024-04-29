@@ -18,9 +18,14 @@ class Perpendicularity(ConstraintProposition):
     def badness(self):
         """See superclass documentation for details.
         """
-        return scaled_sigmoid(abs(90 - abs(self.arguments[0].rot[2] - self.arguments[1].rot[2]))/360)
+        theta0 = self.arguments[0].rot[2] / 180 * np.pi
+        theta1 = self.arguments[1].rot[2] / 180 * np.pi
+        diff = abs(theta0 - theta1)
+        cos = np.cos(diff)
+        return cos
+
     
     def __str__(self) -> str:
         """To string method.
         """
-        return f"Objects {str(self.arguments[0])} and {str(self.arguments[1])} must be perpendicular in z-rotation."
+        return f"{str(self.arguments[0])} and {str(self.arguments[1])} must be perpendicular in z-rotation."

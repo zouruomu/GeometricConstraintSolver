@@ -46,8 +46,8 @@ class Symmetry(ConstraintProposition):
         dists = dists / (np.linalg.norm(mirrored_objects_loc - median_objects_virtual, axis=1) + 1e-7)
 
         badness = np.mean(dists) 
-        badness = scaled_sigmoid(badness)
-        assert (badness >= 0).all() and (badness <= 1).all(), "Badness should be between 0 and 1."
+        badness = np.clip(badness, 0, 1)
+        assert (badness >= 0 - 1e-3).all() and (badness <= 1 + 1e-3).all(), f"Badness should be between 0 and 1. get {badness}"
 
         return badness
     
@@ -58,4 +58,4 @@ class Symmetry(ConstraintProposition):
         for obj in self.arguments[:-1]:
             obj_names += f"{str(obj)}, "
         obj_names += f"and {str(self.arguments[-1])}"
-        return f"Objects {obj_names} must be symmetrical."
+        return f"{obj_names} must be symmetrical."

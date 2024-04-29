@@ -22,20 +22,21 @@ class NoOverlap(ConstraintProposition):
     def badness(self):
         """See superclass documentation for details.
         """
-        def get_overlap_area(obj1, obj2): # [[0,2,6,4],:2] get corners in correct order for Polygon
+        def get_iou(obj1, obj2): # [[0,2,6,4],:2] get corners in correct order for Polygon
             polygon1 = Polygon(obj1.get_corners()[[0,2,6,4],:2].tolist())
             polygon2 = Polygon(obj2.get_corners()[[0,2,6,4],:2].tolist())
             intersection = polygon1.intersection(polygon2)
-            return intersection.area
-        total_overlap_area = 0
+            iou = intersection.area / (polygon1.area + polygon2.area - intersection.area)
+            return iou
+        total_iou = 0
         for i in range(len(self.arguments)):
             for j in range(i, len(self.arguments)):
                 if i == j:
                     continue
-                total_overlap_area += get_overlap_area(self.arguments[i], self.arguments[j])
+                total_iou += get_iou(self.arguments[i], self.arguments[j])
         # FIXME: if total overlap area is too high, sacled_sigmoid looks like 1 everywhere in that neighborhood
         #        and optimizer has trouble, ideally there is a reasonable way to normalize this value
-        return scaled_sigmoid(total_overlap_area)
+        return total_iou
     
     def __str__(self) -> str:
         """To string method.
@@ -44,4 +45,4 @@ class NoOverlap(ConstraintProposition):
         for obj in self.arguments[:-1]:
             obj_names += f"{str(obj)}, "
         obj_names += f"and {str(self.arguments[-1])}"
-        return f"Cuboids {obj_names} must not overlap."
+        return f"{obj_names} must not overlap."

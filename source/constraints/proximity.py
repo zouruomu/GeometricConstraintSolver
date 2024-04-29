@@ -17,4 +17,4 @@ class Proximity(ConstraintProposition):
     def __str__(self) -> str:
         """To string method.
         """
-        return f"Objects {str(self.arguments[0])} and {str(self.arguments[1])} must be proximal."
+        return f"{str(self.arguments[0])} and {str(self.arguments[1])} must be proximal."

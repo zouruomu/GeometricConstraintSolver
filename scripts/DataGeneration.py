@@ -1,6 +1,4 @@
 import os
-import warnings
-warnings.filterwarnings('ignore')
 from itertools import product, combinations
 import numpy as np
 import matplotlib.pyplot as plt
@@ -9,9 +7,10 @@ import shutil
 import pickle
 import multiprocessing
 from multiprocessing import Process
+import argparse
 
 import sys
-sys.path.append("../")
+sys.path.append(".")
 from source import *
 
 def generate_data(data_directory, run_name, num_datapoints,
@@ -58,8 +57,8 @@ def generate_data(data_directory, run_name, num_datapoints,
     # define meta-configurations and all available constraints
     object_min_scale = 1
     object_max_scale = 3
-    constraint_classes = [TranslationalAlignment, RotationalAlignment, DirectionTowards, Parallelism, Perpendicularity,
-                          Proximity, Symmetry]
+    constraint_classes = [TranslationalAlignment, Target, Parallelism, Perpendicularity,
+                          Proximity, Symmetry, Direction]
     constraint_choice_prob = np.array([1, 0.25, 0.25, 0.25, 0.25, 1, 1])
     constraint_choice_prob = constraint_choice_prob / constraint_choice_prob.sum()
 
@@ -252,9 +251,25 @@ def generate_data_multiprocess(data_directory, run_name, num_workers, num_datapo
 
     # finally remove entire temp directory
     shutil.rmtree(temp_directory)
+    
+def parse_args():
+    args = argparse.ArgumentParser()
+    args.add_argument("--num_workers", type=int, default=0)
+    args.add_argument("--save_visualizations", action="store_true")
+    return args.parse_args()
 
 if __name__ == "__main__":
-    generate_data_multiprocess(data_directory="./GeneratedData", run_name="Dataset10000",
-                            num_workers=10, num_datapoints_per_worker=1000,
+    args = parse_args()
+    num_workers = args.num_workers
+    save_visualizations = args.save_visualizations
+    if num_workers <= 1:
+        generate_data(data_directory="./data", run_name="Dataset10000",
+                      num_datapoints=10000,
+                      min_object_count=3, max_object_count=10,
+                      max_constraint_density=1.5,
+                      save_visualizations=save_visualizations)
+    else:
+        generate_data_multiprocess(data_directory="./data", run_name="Dataset10000",
+                            num_workers=num_workers, num_datapoints_per_worker=1000,
                             min_object_count=3, max_object_count=10,
-                            max_constraint_density=1.5, save_visualizations=True)
+                            max_constraint_density=1.5, save_visualizations=save_visualizations)

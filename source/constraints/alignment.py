@@ -82,63 +82,63 @@ class TranslationalAlignment(ConstraintProposition):
         for obj in self.arguments[:-1]:
             obj_names += f"{str(obj)}, "
         obj_names += f"and {str(self.arguments[-1])}"
-        return f"Objects {obj_names} must be aligned along their {loc} {self.dimension}-axis values."
+        return f"{obj_names} must be aligned along their {loc} {self.dimension}-axis values."
     
 
-class RotationalAlignment(ConstraintProposition):
-    """A proposition that represents a notion of rotational alignment between objects.
-
-    NOTE: This constraint proposition is flexible-arity. It can be instantiated with any
-          number of arguments.
-
-    Inherits from the Object abstract class. Alignment is defined by the self.dimension attribute.
-    This constraint's badness is simply the mean absolute deivation of the angles (for specified
-    dimension) of all argument objects.
-
-    Attributes:
-        Superclass attributes.
-        dimension: str, one of "x", "y", or "z", the dimension on which to assert alignment.
-    """
-    def __init__(self, arguments: Iterable[GeometricObject], dimension="z"):
-        """Init method."""
-        super().__init__(arguments)
-
-        # check to make sure dimension and location are valid
-        if dimension not in ["x", "y", "z"]:
-            raise ValueError(f"Argument 'dimension' must be one of 'x', 'y', or 'z'.")
-
-        # store attributes
-        self.dimension = dimension
-
-    @staticmethod
-    def arity():
-        return None # flexible-arity
-
-    def badness(self):
-        """See superclass documentation for details.
-        
-        In this case, badness is calculated as the mean absolute deviation between all objects
-        passed along the specified dimension.
-        """
-        # convert str dimension to index
-        dim_idx = 0
-        if self.dimension == "x": dim_idx = 0
-        elif self.dimension == "y": dim_idx = 1
-        elif self.dimension == "z": dim_idx = 2
-
-        # get values to compare for all objects
-        values_to_compare = []
-        for argument in self.arguments:
-            values_to_compare.append(argument.rot[dim_idx])
-
-        values_to_compare = np.array(values_to_compare)
-        return scaled_sigmoid(np.std(values_to_compare)/360)
-    
-    def __str__(self) -> str:
-        """To string method.
-        """
-        obj_names = ""
-        for obj in self.arguments[:-1]:
-            obj_names += f"{str(obj)}, "
-        obj_names += f"and {str(self.arguments[-1])}"
-        return f"Objects {obj_names} must have the same rotation in the {self.dimension}-axis."
+# class RotationalAlignment(ConstraintProposition):
+#     """A proposition that represents a notion of rotational alignment between objects.
+#
+#     NOTE: This constraint proposition is flexible-arity. It can be instantiated with any
+#           number of arguments.
+#
+#     Inherits from the Object abstract class. Alignment is defined by the self.dimension attribute.
+#     This constraint's badness is simply the mean absolute deivation of the angles (for specified
+#     dimension) of all argument objects.
+#
+#     Attributes:
+#         Superclass attributes.
+#         dimension: str, one of "x", "y", or "z", the dimension on which to assert alignment.
+#     """
+#     def __init__(self, arguments: Iterable[GeometricObject], dimension="z"):
+#         """Init method."""
+#         super().__init__(arguments)
+#
+#         # check to make sure dimension and location are valid
+#         if dimension not in ["x", "y", "z"]:
+#             raise ValueError(f"Argument 'dimension' must be one of 'x', 'y', or 'z'.")
+#
+#         # store attributes
+#         self.dimension = dimension
+#
+#     @staticmethod
+#     def arity():
+#         return None # flexible-arity
+#
+#     def badness(self):
+#         """See superclass documentation for details.
+#         
+#         In this case, badness is calculated as the mean absolute deviation between all objects
+#         passed along the specified dimension.
+#         """
+#         # convert str dimension to index
+#         dim_idx = 0
+#         if self.dimension == "x": dim_idx = 0
+#         elif self.dimension == "y": dim_idx = 1
+#         elif self.dimension == "z": dim_idx = 2
+#
+#         # get values to compare for all objects
+#         values_to_compare = []
+#         for argument in self.arguments:
+#             values_to_compare.append(argument.rot[dim_idx])
+#
+#         values_to_compare = np.array(values_to_compare)
+#         return scaled_sigmoid(np.std(values_to_compare)/360)
+#     
+#     def __str__(self) -> str:
+#         """To string method.
+#         """
+#         obj_names = ""
+#         for obj in self.arguments[:-1]:
+#             obj_names += f"{str(obj)}, "
+#         obj_names += f"and {str(self.arguments[-1])}"
+#         return f"{obj_names} must have the same rotation in the {self.dimension}-axis."
