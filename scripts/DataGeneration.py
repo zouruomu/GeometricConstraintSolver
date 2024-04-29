@@ -198,6 +198,9 @@ def generate_data_multiprocess(data_directory, run_name, num_workers, num_datapo
     """
     # setup
     temp_directory = os.path.join(data_directory, f"temp")
+    if os.path.exists(temp_directory):
+        shutil.rmtree(temp_directory)
+    os.makedirs(temp_directory)
     process_list = []
 
     # start all workers
@@ -244,7 +247,7 @@ def generate_data_multiprocess(data_directory, run_name, num_workers, num_datapo
     shutil.rmtree(temp_directory)
 
 if __name__ == "__main__":
-    generate_data_multiprocess(data_directory="./GeneratedData", run_name="Dataset10000",
-                            num_workers=10, num_datapoints_per_worker=1000,
+    generate_data_multiprocess(data_directory="./GeneratedData", run_name="Dataset20",
+                            num_workers=10, num_datapoints_per_worker=2,
                             axes_scale=10, min_object_count=3, max_object_count=10,
                             max_constraint_density=1.5, save_visualizations=True)
