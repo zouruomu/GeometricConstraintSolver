@@ -20,25 +20,25 @@ class Direction(ConstraintProposition):
     def arity():
         return 2
 
-    def badness(self):
-        return int(self._badness())
-            
     def _badness(self) -> bool:
         obj1, obj2 = self.arguments
+        rel_vec = (obj2.loc - obj1.loc)[:2]
+        rel_vec = rel_vec / np.linalg.norm(rel_vec)
         if self.direction == "left":
-            return obj2.loc[0] < obj1.loc[0]
+            ref_vec = np.array([-1, 0])
         elif self.direction == "right":
-            return obj2.loc[0] > obj1.loc[0]
+            ref_vec = np.array([1, 0])
         elif self.direction == "up":
             raise NotImplementedError
         elif self.direction == "down":
             raise NotImplementedError
         elif self.direction == "front":
-            return obj2.loc[1] < obj1.loc[1]
+            ref_vec = np.array([0, -1])
         elif self.direction == "back":
-            return obj2.loc[1] > obj1.loc[1]
+            ref_vec = np.array([0, 1])
         else:
             raise NotImplementedError
+        return (np.dot(rel_vec, ref_vec) + 1) / 2
     
     def __str__(self) -> str:
         return f"{str(self.arguments[1])} must be on the {self.direction} of {str(self.arguments[0])}."
