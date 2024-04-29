@@ -11,11 +11,6 @@ class Problem:
     in the problem is given an id by the user code on addition. Any object not added to the problem
     is treated as constant and immovable.
 
-    NOTE: When adding constraint propositions between optimizable objects, it is recommended to use the
-          function get_optimizable_object with the desired object's id to prevent confusion. Any objects
-          that are not explicitly id-ed and added through add_optimizable_object but are mentioned in
-          any of the constraint propositions is treated as immovable.
-
     Attributes:
         optimizable_objects: A dictionary of GeometricObjects that are optimizable, each with a unique id.
         constraint_propositions: A list of ConstraintPropositions between GeometricObjects that we want to satisfy.
@@ -23,49 +18,18 @@ class Problem:
     """
     def __init__(self):
         """Create an empty problem."""
-        self.optimizable_objects = {}
+        self.optimizable_objects = []
         self.constraint_propositions = []
         self.constraint_weights = []
 
-    def add_optimizable_object(self, object, id):
-        """Add a GeometricObject to self.optimizable_objects with given id.
+    def add_optimizable_object(self, object):
+        """Add a GeometricObject to self.optimizable_objects.
         Args:
             object: A GeometricObject to be added.
-            id: The id to identify the object with.
         Returns:
             None.
-        Raises:
-            ValueError if an object with id is already in self.optimizable_objects.
         """
-        if id in self.optimizable_objects:
-            raise ValueError(f"The id passed ({id}) is already associated with an object in the problem.")
-        self.optimizable_objects[id] = object
-
-    def remove_optimizable_object(self, id):
-        """Remove an GeometricObject from self.optimizable_objects by id.
-        Args:
-            id: The id to of the object to remove.
-        Returns:
-            None.
-        Raises:
-            ValueError if id passed is not present in self.optimizable_objects.
-        """
-        if id not in self.optimizable_objects:
-            raise ValueError(f"The id passed ({id}) is not associated with any object in the problem.")
-        self.optimizable_objects.pop(id)
-
-    def get_optimizable_object(self, id):
-        """Get pointer to an GeometricObject from self.optimizable_objects by id.
-        Args:
-            id: The id to of the object to get.
-        Returns:
-            A pointer to the desired object.
-        Raises:
-            ValueError if id passed is not present in self.optimizable_objects.
-        """
-        if id not in self.optimizable_objects:
-            raise ValueError(f"The id passed ({id}) is not associated with any object in the problem.")
-        return self.optimizable_objects[id]
+        self.optimizable_objects.append(object)
 
     def add_constraint_proposition(self, proposition, weight):
         """Add a new ConstraintProposition to the problem.
@@ -81,16 +45,16 @@ class Problem:
     def _flatten_optimizable_parameters(self):
         """Helper function to flatten the optimizable parameters of all optimizable objects for scipy."""
         arrays = []
-        for id, object in self.optimizable_objects.items():
+        for object in self.optimizable_objects:
             arrays.append(object.get_optimizable_attr())
         return np.concatenate(arrays)
 
     def _recover_optimizable_parameters(self, flat_array):
         """Helper function to recover the optimizable parameters of all optimizable objects given flat array.
         NOTE: flat_array has to be one originally outputted by _flatten_optimizable_parameters."""
-        obj_len = len(next(iter(self.optimizable_objects.values())).get_optimizable_attr())
+        obj_len = len(self.optimizable_objects[0].get_optimizable_attr())
         cur = 0
-        for id, object in self.optimizable_objects.items():
+        for object in self.optimizable_objects:
             object.set_optimizable_attr(flat_array[cur:cur+obj_len])
             cur = cur + obj_len
 
@@ -125,7 +89,7 @@ class Problem:
         # set the objects to the final solution
         self._recover_optimizable_parameters(solution.x)
 
-    def plot_on_ax(self, ax, ax_title, fixed_axes=None, elev=30, azim=40):
+    def plot_on_ax(self, ax, ax_title, fixed_axes=None, elev=30, azim=40, persp=True):
         """Plot the problem with all optimizable objects on axis ax.
 
         This generates a 3D plot.
@@ -144,22 +108,23 @@ class Problem:
         # add all objects to ax
         legend_patchs = []
         color_idx = 0 # will wrap around
-        for id, object in self.optimizable_objects.items(): 
-            legend_patchs.append(object.add_self_to_axis(ax, label=id, color=colors[color_idx]))
+        for object in self.optimizable_objects: 
+            legend_patchs.append(object.add_self_to_axis(ax, color=colors[color_idx]))
             color_idx += 1
             color_idx = color_idx % len(colors)
 
         # configure plot info
-        ax.set_title(ax_title, y=0.95)
+        ax.set_title(ax_title, y=1.1)
         ax.set_xlabel("x")
         ax.set_ylabel("y")
         ax.set_zlabel("z")
-        ax.legend(handles=legend_patchs, loc="upper right", bbox_to_anchor=(1.32,1))
+        ax.legend(handles=legend_patchs, loc="upper right", bbox_to_anchor=(1.4,1))
         if fixed_axes is not None:
             ax.set_xlim(-fixed_axes,fixed_axes)
             ax.set_ylim(-fixed_axes,fixed_axes)
-            ax.set_zlim(-fixed_axes,fixed_axes)
+            ax.set_zlim(0,fixed_axes*2)
 
         #configure view
-        ax.set_proj_type("persp",focal_length=0.2)
+        if persp:
+            ax.set_proj_type("persp",focal_length=0.2)
         ax.view_init(elev=elev,azim=azim)

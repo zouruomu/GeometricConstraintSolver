@@ -31,8 +31,8 @@ class ConstraintProposition:
         """
         arguments = list(arguments)
         # check to make sure list has correct arity
-        if self.arity is not None and len(arguments) != self.arity:
-            raise ValueError(f"Input args has arity {len(arguments)}, but constraint was defined with arity {self.arity}.")
+        if self.arity() is not None and len(arguments) != self.arity():
+            raise ValueError(f"Input args has arity {len(arguments)}, but constraint was defined with arity {self.arity()}.")
 
         # if it does, store as attribute
         self.arguments = arguments
@@ -64,5 +64,10 @@ class ConstraintProposition:
             None. 
         Returns:
             A scalar float value indicating badness of satisfaction of this constraint by self.arguments.
+        """
+        raise NotImplementedError
+    
+    def __str__(self) -> str:
+        """To string method.
         """
         raise NotImplementedError

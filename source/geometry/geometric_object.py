@@ -1,7 +1,5 @@
 import numpy as np
 
-######################################## Geometric Objects: Abstract Superclass ########################################
-
 class GeometricObject:
     """Abstract superclass defining a generic 3D geometric object with location, rotation, and scale.
 
@@ -15,20 +13,28 @@ class GeometricObject:
         loc: a length 3 np.array of form [loc_x, loc_y, loc_z].
         rot: a length 3 np.array of form [rot_x, rot_y, rot_z].
         scale: a length 3 np.array of form [scale_x, scale_y, scale_z].
+        name: str, natural language name for the object.
     """
-    def __init__(self, loc, rot, scale):
+    def __init__(self, loc, rot, scale, name):
         """Init method.
         
         Args: 
             loc: list-like with form [X,Y,Z], object centroid coordinates.
             rot: list-like with form [X,Y,Z], object rotation in degrees.
             scale: list-like with form [X,Y,Z], object scale.
+            name: str, natural language name for the object.
         Returns:
             None
         """
         self.loc = np.array(loc)
         self.rot = np.array(rot)
         self.scale = np.array(scale)
+        self.name = name
+
+    def __str__(self) -> str:
+        """To string method.
+        """
+        return str(self.name)
 
     def get_all_attr(self):
         """Get all attributes in the form of a flat np.array.
@@ -66,7 +72,7 @@ class GeometricObject:
         Returns:
             None. Modifies self.geometry.
         """
-        self.loc = attr_array[:2]
+        self.loc[:2] = attr_array[:2]
         self.rot[2] = attr_array[2]
 
     def get_bounding_intervals(self):
@@ -85,16 +91,13 @@ class GeometricObject:
         """
         raise NotImplementedError
 
-    def add_self_to_axis(self, ax, label, color):
+    def add_self_to_axis(self, ax, color):
         """Add self as a 3D wireframe shape with appropriate loc/rot/scale to an matplotlib axis.
 
         Args:
             ax: A matplotlib axis with projection set to 3D.
-            label: A str, label to display in legend.
             color: A valid matplotlib color to use for this object's wireframe.
         Returns:
             A color patch with label to be passed to legend handler. Also modifies the input argument ax.
         """
         raise NotImplementedError
-
-######################################### Geometric Objects: Concrete Objects ##########################################

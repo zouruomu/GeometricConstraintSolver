@@ -1,29 +1,18 @@
 import numpy as np
 from scipy.spatial import distance_matrix
+from ..utils.scaled_sigmoid import scaled_sigmoid
 from copy import deepcopy
 
 from .constraint import ConstraintProposition, GeometricObject
 
 
 class Symmetry(ConstraintProposition):
-    """A proposition that specifies that the TWO passed arguments must be symmetrical around a point.
-    A list objects should be symetrical around their median point.
-
-    NOTE: This constraint proposition is binary ("_B").
-
-    Inherits from the Object abstract class. Symmetry around a point is defined as having the vector
-    from argument_1 to the point be the opposite of the one from argument_2 to the point.
-
-    Attributes:
-        Superclass attributes.
-        point: a list of form [x,y,z] specifying the point around which the arguments are symmetrical.
-    """
     def __init__(self, arguments, clamp=False):
         super().__init__(arguments)
         self.clamp = clamp
 
-    @property
-    def arity(self):
+    @staticmethod
+    def arity():
         return None
 
     def badness(self):
@@ -57,6 +46,16 @@ class Symmetry(ConstraintProposition):
         dists = dists / (np.linalg.norm(mirrored_objects_loc - median_objects_virtual, axis=1) + 1e-7)
 
         badness = np.mean(dists) 
+        badness = scaled_sigmoid(badness)
         assert (badness >= 0).all() and (badness <= 1).all(), "Badness should be between 0 and 1."
 
         return badness
+    
+    def __str__(self) -> str:
+        """To string method.
+        """
+        obj_names = ""
+        for obj in self.arguments[:-1]:
+            obj_names += f"{str(obj)}, "
+        obj_names += f"and {str(self.arguments[-1])}"
+        return f"Objects {obj_names} must be symmetrical."

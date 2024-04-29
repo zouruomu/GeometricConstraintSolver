@@ -3,22 +3,20 @@ import warnings
 warnings.filterwarnings('ignore')
 from itertools import product, combinations
 import numpy as np
-import scipy
-from scipy.spatial.transform import Rotation as R
-from scipy.optimize import minimize, basinhopping
-import matplotlib
-matplotlib.rcParams['figure.dpi'] = 140
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
-import matplotlib.colors as mcolors
 from tqdm import tqdm
 import shutil
 import pickle
-from GeoConstraintSolver import *
+import multiprocessing
+from multiprocessing import Process
+
+import sys
+sys.path.append("../")
+from source import *
 
 def generate_data(data_directory, run_name, num_datapoints, axes_scale=10,
                   min_object_count=3, max_object_count=10,
-                  min_constraint_count=5, max_constraint_count=15,
+                  max_constraint_density=1.5,
                   save_visualizations=False):
     """Generate data mapping from initial objects and a list of constraint propositions to final/solved objects.
 
@@ -26,7 +24,8 @@ def generate_data(data_directory, run_name, num_datapoints, axes_scale=10,
     "{run_name}.pkl" already exists, it will be overriden. Unpacking "{run_name}.pkl"
     will yield a list of dictionaries (each datapoint is represented as a dictionary).
 
-    NOTE: Current version of function only generates data where x and y rotation are both 0.
+    NOTE: Current version of function only generates data where x and y rotation are both 0 and
+          z location is z_scale/2 (object "placed" on the z=0 plane).
 
     Args:
         data_directory: str, directory in which to create a new folder to store generated data.
@@ -34,15 +33,15 @@ def generate_data(data_directory, run_name, num_datapoints, axes_scale=10,
         num_datapoints: int, number of datapoints to generate.
         axes_scale: int, the scale of the coordinates to generate, axes will range [-axes_scale, axes_scale].
         {min,max}_object_count: ints, the min/max number of objects in each datapoint (sampled uniformally).
-        {min,max}_constraint_count: ints, the min/max number of constraints in each datapoint (sampled uniformally).
+        max_constraint_density: float, number of constraints will be uniform(1, round(num_objs*high))
 
     Returns:
         None.
     """
     # define function to convert object to dictionary according to given specifications
-    def obj_to_dict(obj, name):
+    def obj_to_dict(obj):
         obj_dict = {
-            "name": name,
+            "name": obj.name,
             "position": obj.loc,
             "size": obj.scale,
             "orientation": obj.rot
@@ -50,29 +49,21 @@ def generate_data(data_directory, run_name, num_datapoints, axes_scale=10,
         return obj_dict
 
     # define function to convert constraint to dictionary according to given specifications
-    def constraint_to_dict(name, args, weight):
-        obj_dict = {
-            "class": name,
-            "args": args,
+    def constraint_to_dict(constraint, weight):
+        constraint_dict = {
+            "constraint": str(constraint),
             "weight": weight
         }
-        return obj_dict
+        return constraint_dict
     
     # define meta-configurations and all available constraints
     object_min_scale = 1
     object_max_scale = 3
     object_coord_range = axes_scale - object_max_scale/2 # actual range is [-object_coord_range, object_coord_range]
-    constraints = [IsUpright_U, IsAtOrigin_U, AreProximal_B, HaveSameRotation_F,
-                   AreTopAligned_F, AreBottomAligned_F, AreSymmetricalAround_T,
-                   AreNotOverlapping_B, AreParallelZ_B, ArePerpendicularZ_B,
-                   AreXPlusAligned_F, AreXMinusAligned_F, AreYPlusAligned_F, AreYMinusAligned_F]
-    constraint_names = ["IsUpright", "IsAtOrigin", "AreProximal", "HaveSameRotation",
-                        "AreTopAligned", "AreBottomAligned", "AreSymmetricalAround",
-                        "AreNotOverlapping", "AreParallelZ", "ArePerpendicularZ",
-                        "AreXPlusAligned", "AreXMinusAligned", "AreYPlusAligned", "AreYMinusAligned"]
-    constraint_arities = [1, 1, 2, None, None, None, 3, 2, 2, 2, None, None, None, None]
-    constraint_weights = np.array([1, 1, 2, 1, 1, 1, 1, 2, 1, 1, 0.5, 0.5, 0.5, 0.5])
-    constraint_weights = constraint_weights / constraint_weights.sum()
+    constraint_classes = [TranslationalAlignment, RotationalAlignment, DirectionTowards, Parallelism, Perpendicularity,
+                          Proximity, Symmetry]
+    constraint_choice_prob = np.array([1, 0.5, 0.5, 0.5, 0.5, 1, 1])
+    constraint_choice_prob = constraint_choice_prob / constraint_choice_prob.sum()
 
     # optionally setup folder to save figures in
     if save_visualizations:
@@ -94,72 +85,87 @@ def generate_data(data_directory, run_name, num_datapoints, axes_scale=10,
         # initialize problem and determine how many objects and contraints this datapoint will have
         problem = Problem()
         num_objs = np.random.randint(low=min_object_count, high=max_object_count+1)
-        num_constraints = np.random.randint(low=min_constraint_count, high=max_constraint_count+1)  
+        num_constraints = np.random.randint(low=num_objs, high=round(num_objs*max_constraint_density)+1)  
 
         # create the objects (random initialization, 50% of objects will be upright)
         objs = []
-        obj_names = []
         for i in range(1,num_objs+1):
             #create random object
-            obj = Cuboid(loc=np.random.uniform(low=-object_coord_range ,high=object_coord_range, size=(3)),
-                         rot=[0,0,0 if np.random.uniform() < 0.5 else np.random.uniform(low=-180, high=180)],
-                         scale=np.random.uniform(low=object_min_scale ,high=object_max_scale, size=(3)))
-            # name and add to lists and problem
-            obj_name = f"Cube{i}"
+            scale = np.random.uniform(low=object_min_scale, high=object_max_scale, size=(3))
+            loc = np.random.uniform(low=-object_coord_range, high=object_coord_range, size=(3))
+            loc[2] = scale[2]/2 # place on x-y plane
+            rot = [0,0,0 if np.random.uniform() < 0.5 else np.random.uniform(low=-180, high=180)]
+            obj = Cuboid(loc=loc,
+                         rot=rot,
+                         scale=scale,
+                         name=f"Cube{i}")
+            # add to list and problem
             objs.append(obj)
-            obj_names.append(obj_name)
-            problem.add_optimizable_object(obj, obj_name)
+            problem.add_optimizable_object(obj)
             # add in dictionary form to initial_objs_output
-            initial_objs_output.append(obj_to_dict(obj, obj_name))
+            initial_objs_output.append(obj_to_dict(obj))
         objs = np.array(objs)
-        obj_names = np.array(obj_names)
 
         # optionally setup plot
         if save_visualizations:
-            fig, ax = plt.subplots(nrows=2, ncols=1, figsize=(8,12), subplot_kw={"projection": "3d"})
-            problem.plot_on_ax(ax=ax[0], ax_title="Initial Objects (Unconstrained)", fixed_axes=axes_scale)
+            fig, ax = plt.subplots(nrows=2, ncols=2, figsize=(12,12), subplot_kw={"projection": "3d"})
+            problem.plot_on_ax(ax=ax[0][0], ax_title="Unconstrained Objects (Perspective View)",
+                               fixed_axes=axes_scale, elev=30, azim=40, persp=True)
+            problem.plot_on_ax(ax=ax[0][1], ax_title="Unconstrained Objects (Top View)",
+                               fixed_axes=axes_scale, elev=90, azim=0, persp=False)
 
         # add the constraints (between random objects)
-        if save_visualizations: # optionally create a string to put at bottom of visualization
+        if save_visualizations: # optionally create a string to put at middle of visualization
             description = ""
-        for i in range(1,num_constraints+1):
+        for i in range(1,num_constraints): # num_constraints - 1 random constraints and 1 NoOverlap constraint
             # find random constraint
-            constraint_idx = np.random.choice(len(constraints), p=constraint_weights) # [0,len(constraints))
-            constraint = constraints[constraint_idx]
-            constraint_name = constraint_names[constraint_idx]
-            constraint_arity = constraint_arities[constraint_idx]
+            constraint_class = np.random.choice(a=constraint_classes, p=constraint_choice_prob)
+            constraint_arity = constraint_class.arity()
             if constraint_arity is None: # for flexible arity constraints
-                constraint_arity = np.random.randint(low=1, high=num_objs)
+                constraint_arity = np.random.randint(low=1, high=max(2,num_objs/2))
 
-            # find random objects as arguments and find random weight
-            constraint_arg_idx = np.random.choice(a=num_objs, size=constraint_arity, replace=False)
-            constraint_args = objs[constraint_arg_idx]
-            constraint_arg_names = obj_names[constraint_arg_idx]
-            constraint_weight = np.random.choice([0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.0]) # random weight
+            # find random objects as arguments and find weight
+            constraint_args = np.random.choice(a=objs, size=constraint_arity, replace=False)
+            constraint_weight = 1 # same weight for all
+            # constraint_weight = np.random.choice([0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.0]) # random weight
 
-            # add to problem, constraints_output, and optionally update description
-            problem.add_constraint_proposition(constraint(arguments=constraint_args),
-                                               weight=constraint_weight)
-            constraints_output.append(constraint_to_dict(name=constraint_name,
-                                                         args=list(constraint_arg_names),
-                                                         weight=constraint_weight))
+            # create constraint object, add to problem, constraints_output, and optionally update description
+            constraint_obj = constraint_class(arguments=constraint_args)
+            problem.add_constraint_proposition(constraint_obj, weight=constraint_weight)
+            constraints_output.append(constraint_to_dict(constraint=constraint_obj, weight=constraint_weight))
             if save_visualizations:
-                description += f"Constraint {i} (with weight {constraint_weight}): {constraint_name}({constraint_arg_names}).\n"
+                description += str(constraint_obj) + "\n"
+
+        # add the NoOverlap constraint
+        no_overlap = NoOverlap(arguments=objs)
+        problem.add_constraint_proposition(no_overlap, weight=1)
+        constraints_output.append(constraint_to_dict(constraint=no_overlap, weight=1))
+        if save_visualizations:
+                description += str(no_overlap)
 
         # solve the problem
         problem.solve()
 
-        # re-cast z-rotation to (-180,180) add the solved objects to solved_objects_output
-        for i in range(num_objs):
-            modded = objs[i].loc[2] % 360 # cast to (0,360)
-            objs[i].loc[2] = modded if modded <= 180 else modded - 360
-            solved_objects_output.append(obj_to_dict(objs[i], obj_names[i]))
+        # post-solve processing
+        for obj in objs:
+            # clip x and y coordinates to object_coord_range (solve might move objects very far)
+            obj.loc = np.clip(obj.loc, a_min=-object_coord_range, a_max=object_coord_range)
+            
+            # re-cast z-rotation to (-180,180)
+            modded = obj.rot[2] % 360 # cast to (0,360)
+            obj.rot[2] = modded if modded <= 180 else modded - 360
+
+            # add the solved objects to solved_objects_output
+            solved_objects_output.append(obj_to_dict(obj))
 
         # optionally plot the final state and save figure
         if save_visualizations:
-            problem.plot_on_ax(ax=ax[1], ax_title="Solved Objects (Constrained)", fixed_axes=axes_scale)
-            file_name = os.path.join(figures_folder_name, f"visualization_{datapoint_id}.png")
-            plt.figtext(x=0,y=0.39,s=description)
+            problem.plot_on_ax(ax=ax[1][0], ax_title="Solved Objects (Perspective View)",
+                               fixed_axes=axes_scale, elev=30, azim=40, persp=True)
+            problem.plot_on_ax(ax=ax[1][1], ax_title="Solved Objects (Top View)",
+                               fixed_axes=axes_scale, elev=90, azim=0, persp=False)
+            file_name = os.path.join(figures_folder_name, f"{run_name}_visualization_{datapoint_id}.png")
+            plt.figtext(x=0.1,y=0.39,s=description)
             plt.subplots_adjust(hspace=1)
             plt.savefig(file_name)
             plt.close()
@@ -177,14 +183,68 @@ def generate_data(data_directory, run_name, num_datapoints, axes_scale=10,
     with open(pkl_path, "wb") as f:
         pickle.dump(dataset, f)
 
-generate_data(data_directory="./GeneratedData", run_name="Dataset8000",
-              num_datapoints=8000, axes_scale=10,
-              min_object_count=3, max_object_count=10,
-              min_constraint_count=5, max_constraint_count=15,
-              save_visualizations=False)
-
-# generate_data(data_directory="./GeneratedData", run_name="Dataset2",
-#               num_datapoints=2, axes_scale=10,
+# generate_data(data_directory="./GeneratedData", run_name="Dataset10",
+#               num_datapoints=10, axes_scale=10,
 #               min_object_count=3, max_object_count=10,
-#               min_constraint_count=5, max_constraint_count=15,
+#               max_constraint_density=1.5,
 #               save_visualizations=True)
+
+def generate_data_multiprocess(data_directory, run_name, num_workers, num_datapoints_per_worker,
+                               axes_scale=10, min_object_count=3, max_object_count=10,
+                               max_constraint_density=1.5, save_visualizations=False):
+    """Multiprocessing version of generate_data, uses generate_data.
+
+    NOTE: Total datapoints generated will be num_workers * num_datapoints_per_worker
+    """
+    # setup
+    temp_directory = os.path.join(data_directory, f"temp")
+    process_list = []
+
+    # start all workers
+    for i in range(num_workers):
+        p = Process(target=generate_data, args=[temp_directory, f"Worker{i}", num_datapoints_per_worker,
+                                                axes_scale, min_object_count, max_object_count,
+                                                max_constraint_density, save_visualizations])
+        p.start()
+        process_list.append(p)
+
+    # join workers
+    for process in process_list:
+        process.join()
+
+    # when done, combined pickled data
+    all_data = []
+    for i in range(num_workers):
+        pickle_file = os.path.join(temp_directory, f"Worker{i}.pkl")
+        with open(pickle_file, "rb") as f:
+            cur_data = pickle.load(f)
+        all_data += cur_data
+
+    # re-pickle combined dataset
+    pkl_path = os.path.join(data_directory, f"{run_name}.pkl")
+    with open(pkl_path, "wb") as f:
+        pickle.dump(all_data, f)
+    
+    # optionally combined all visualizations
+    if save_visualizations:
+        # make new folder for combined visualizations
+        figures_folder_dir = os.path.join(data_directory, f"{run_name}_visualizations/")
+        if os.path.exists(figures_folder_dir):
+            shutil.rmtree(figures_folder_dir)
+        os.makedirs(figures_folder_dir)
+
+        # loop through all temp folders
+        for i in range(num_workers):
+            temp_vis_dir = os.path.join(temp_directory, f"Worker{i}_visualizations/")
+            for img_name in os.listdir(temp_vis_dir):
+                img_dir = os.path.join(temp_vis_dir, img_name)
+                shutil.move(img_dir, figures_folder_dir)
+
+    # finally remove entire temp directory
+    shutil.rmtree(temp_directory)
+
+if __name__ == "__main__":
+    generate_data_multiprocess(data_directory="./GeneratedData", run_name="Dataset10000",
+                            num_workers=10, num_datapoints_per_worker=1000,
+                            axes_scale=10, min_object_count=3, max_object_count=10,
+                            max_constraint_density=1.5, save_visualizations=True)

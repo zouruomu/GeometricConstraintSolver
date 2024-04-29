@@ -47,8 +47,8 @@ class Cuboid(GeometricObject):
     Attributes:
         Same as super-class, no additional attributes. Add additional attributes as needed.
     """
-    def __init__(self, loc, rot, scale):
-        super().__init__(loc, rot, scale)
+    def __init__(self, loc, rot, scale, name):
+        super().__init__(loc, rot, scale, name)
 
     def get_bounding_intervals(self):
         """Get bounding intervals around the (possibly rotated) cuboid.
@@ -69,7 +69,7 @@ class Cuboid(GeometricObject):
                 [min_by_dim[1], max_by_dim[1]],
                 [min_by_dim[2], max_by_dim[2]])
         
-    def add_self_to_axis(self, ax, label, color):
+    def add_self_to_axis(self, ax, color):
         """Add self as 3D wireframe cuboid to ax.
 
         See super-class documentation for specifics. For a cuboid, we just draw a simple
@@ -102,7 +102,7 @@ class Cuboid(GeometricObject):
         ax.plot(*zip(vertices[3],vertices[7]), color=color)
 
         # return a patch for legend
-        return mpatches.Patch(color=color, label=label)
+        return mpatches.Patch(color=color, label=self.name)
         
 
     def get_corners(self):
@@ -136,6 +136,4 @@ class Cuboid(GeometricObject):
         angle = self.rot[-1]
 
         return RotatedRect(cx, cy, w, h, angle, use_radians=False)
-
-########################################### Constraints: Abstract Superclass ###########################################
 

@@ -4,8 +4,8 @@ class Proximity(ConstraintProposition):
     """
     NOTE: Currently it is only defined for 2D objects.
     """
-    @property
-    def arity(self):
+    @staticmethod
+    def arity():
         return 2 # binary
 
     def badness(self):
@@ -13,3 +13,8 @@ class Proximity(ConstraintProposition):
         dist = obj1.to_2d_rect().distance(obj2.to_2d_rect())
         dist = min(1, dist)
         return dist
+    
+    def __str__(self) -> str:
+        """To string method.
+        """
+        return f"Objects {str(self.arguments[0])} and {str(self.arguments[1])} must be proximal."

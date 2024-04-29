@@ -1,4 +1,5 @@
 from .constraint import ConstraintProposition, GeometricObject
+from ..utils.scaled_sigmoid import scaled_sigmoid
 import numpy as np
 from typing import Iterable
 
@@ -20,25 +21,30 @@ class TranslationalAlignment(ConstraintProposition):
 
     Attributes:
         Superclass attributes.
-        dimension: str, one of "x", "y", or "z", the dimension on which to assert alignment.
+        dimension: str, one of "x", "y", "z", or "random", the dimension on which to assert alignment.
         location: str, one of "bounding_min", "bounding_max", or "center", where to check alignment.
     """
-    def __init__(self, arguments: Iterable[GeometricObject], dimension: str, location: str):
+    def __init__(self, arguments: Iterable[GeometricObject], dimension="random", location="random"):
         """Init method."""
         super().__init__(arguments)
 
         # check to make sure dimension and location are valid
-        if dimension not in ["x", "y", "z"]:
-            raise ValueError(f"Argument 'dimension' must be one of 'x', 'y', or 'z'.")
-        if location not in ["bounding_min", "bounding_max", "center"]:
-            raise ValueError(f"Argument 'dimension' must be one of 'bounding_min', 'bounding_max', or 'center'.")
+        if dimension not in ["x", "y", "z", "random"]:
+            raise ValueError(f"Argument 'dimension' must be one of 'x', 'y', 'z', or 'random'.")
+        if location not in ["bounding_min", "bounding_max", "center", "random"]:
+            raise ValueError(f"Argument 'dimension' must be one of 'bounding_min', 'bounding_max', 'center', or 'random'.")
+        
+        if dimension == "random":
+            dimension = np.random.choice(["x", "y", "z"])
+        if location == "random":
+            location = np.random.choice(["bounding_min", "bounding_max", "center"])
 
         # store attributes
         self.dimension = dimension
         self.location = location
 
-    @property
-    def arity(self):
+    @staticmethod
+    def arity():
         return None # flexible-arity
 
     def badness(self):
@@ -55,7 +61,7 @@ class TranslationalAlignment(ConstraintProposition):
 
         # get values to compare for all objects
         values_to_compare = []
-        for argument in self.args:
+        for argument in self.arguments:
             if self.location == "bounding_min":
                 values_to_compare.append(argument.get_bounding_intervals()[dim_idx][0])
             elif self.location == "bounding_max":
@@ -64,7 +70,19 @@ class TranslationalAlignment(ConstraintProposition):
                 values_to_compare.append(argument.loc[dim_idx])
 
         values_to_compare = np.array(values_to_compare)
-        return np.std(values_to_compare)
+        return scaled_sigmoid(np.std(values_to_compare))
+    
+    def __str__(self) -> str:
+        """To string method.
+        """
+        if self.location == "center": loc = "centermost"
+        if self.location == "bounding_min": loc = "smallest"
+        if self.location == "bounding_max": loc = "largest"
+        obj_names = ""
+        for obj in self.arguments[:-1]:
+            obj_names += f"{str(obj)}, "
+        obj_names += f"and {str(self.arguments[-1])}"
+        return f"Objects {obj_names} must be aligned along their {loc} {self.dimension}-axis values."
     
 
 class RotationalAlignment(ConstraintProposition):
@@ -81,9 +99,9 @@ class RotationalAlignment(ConstraintProposition):
         Superclass attributes.
         dimension: str, one of "x", "y", or "z", the dimension on which to assert alignment.
     """
-    def __init__(self, *args, dimension):
+    def __init__(self, arguments: Iterable[GeometricObject], dimension="z"):
         """Init method."""
-        super().__init__(*args)
+        super().__init__(arguments)
 
         # check to make sure dimension and location are valid
         if dimension not in ["x", "y", "z"]:
@@ -92,8 +110,8 @@ class RotationalAlignment(ConstraintProposition):
         # store attributes
         self.dimension = dimension
 
-    @property
-    def arity(self):
+    @staticmethod
+    def arity():
         return None # flexible-arity
 
     def badness(self):
@@ -114,4 +132,13 @@ class RotationalAlignment(ConstraintProposition):
             values_to_compare.append(argument.rot[dim_idx])
 
         values_to_compare = np.array(values_to_compare)
-        return np.std(values_to_compare)
+        return scaled_sigmoid(np.std(values_to_compare)/360)
+    
+    def __str__(self) -> str:
+        """To string method.
+        """
+        obj_names = ""
+        for obj in self.arguments[:-1]:
+            obj_names += f"{str(obj)}, "
+        obj_names += f"and {str(self.arguments[-1])}"
+        return f"Objects {obj_names} must have the same rotation in the {self.dimension}-axis."
