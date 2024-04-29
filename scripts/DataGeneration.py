@@ -14,7 +14,7 @@ import sys
 sys.path.append("../")
 from source import *
 
-def generate_data(data_directory, run_name, num_datapoints, axes_scale=10,
+def generate_data(data_directory, run_name, num_datapoints,
                   min_object_count=3, max_object_count=10,
                   max_constraint_density=1.5,
                   save_visualizations=False):
@@ -31,7 +31,6 @@ def generate_data(data_directory, run_name, num_datapoints, axes_scale=10,
         data_directory: str, directory in which to create a new folder to store generated data.
         run_name: str, the name of the pkl file to create will be "{run_name}.pkl".
         num_datapoints: int, number of datapoints to generate.
-        axes_scale: int, the scale of the coordinates to generate, axes will range [-axes_scale, axes_scale].
         {min,max}_object_count: ints, the min/max number of objects in each datapoint (sampled uniformally).
         max_constraint_density: float, number of constraints will be uniform(1, round(num_objs*high))
 
@@ -59,10 +58,9 @@ def generate_data(data_directory, run_name, num_datapoints, axes_scale=10,
     # define meta-configurations and all available constraints
     object_min_scale = 1
     object_max_scale = 3
-    object_coord_range = axes_scale - object_max_scale/2 # actual range is [-object_coord_range, object_coord_range]
     constraint_classes = [TranslationalAlignment, RotationalAlignment, DirectionTowards, Parallelism, Perpendicularity,
                           Proximity, Symmetry]
-    constraint_choice_prob = np.array([1, 0.5, 0.5, 0.5, 0.5, 1, 1])
+    constraint_choice_prob = np.array([1, 0.25, 0.25, 0.25, 0.25, 1, 1])
     constraint_choice_prob = constraint_choice_prob / constraint_choice_prob.sum()
 
     # optionally setup folder to save figures in
@@ -81,18 +79,28 @@ def generate_data(data_directory, run_name, num_datapoints, axes_scale=10,
         initial_objs_output = []
         constraints_output = []
         solved_objects_output = []
-        
-        # initialize problem and determine how many objects and contraints this datapoint will have
-        problem = Problem()
+
+        # determine datapoint bounds and how many objects and contraints this datapoint will have
+        scene_xmin = np.random.randint(low=-20, high=-10+1)
+        scene_ymin = np.random.randint(low=-20, high=-10+1)
+        scene_xmax = np.random.randint(low=10, high=20+1)
+        scene_ymax = np.random.randint(low=10, high=20+1)
         num_objs = np.random.randint(low=min_object_count, high=max_object_count+1)
         num_constraints = np.random.randint(low=num_objs, high=round(num_objs*max_constraint_density)+1)  
+
+        # initialize problem and determine 
+        problem = Problem(scene_xmin=scene_xmin, scene_xmax=scene_xmax,
+                          scene_ymin=scene_ymin, scene_ymax=scene_ymax,
+                          scene_zmax=10)
 
         # create the objects (random initialization, 50% of objects will be upright)
         objs = []
         for i in range(1,num_objs+1):
             #create random object
             scale = np.random.uniform(low=object_min_scale, high=object_max_scale, size=(3))
-            loc = np.random.uniform(low=-object_coord_range, high=object_coord_range, size=(3))
+            loc = [0,0,0]
+            loc[0] = np.random.randint(low=scene_xmin+object_max_scale, high=scene_xmax-object_max_scale+1)
+            loc[1] = np.random.randint(low=scene_ymin+object_max_scale, high=scene_ymax-object_max_scale+1)
             loc[2] = scale[2]/2 # place on x-y plane
             rot = [0,0,0 if np.random.uniform() < 0.5 else np.random.uniform(low=-180, high=180)]
             obj = Cuboid(loc=loc,
@@ -110,9 +118,9 @@ def generate_data(data_directory, run_name, num_datapoints, axes_scale=10,
         if save_visualizations:
             fig, ax = plt.subplots(nrows=2, ncols=2, figsize=(12,12), subplot_kw={"projection": "3d"})
             problem.plot_on_ax(ax=ax[0][0], ax_title="Unconstrained Objects (Perspective View)",
-                               fixed_axes=axes_scale, elev=30, azim=40, persp=True)
+                               elev=30, azim=40, persp=True)
             problem.plot_on_ax(ax=ax[0][1], ax_title="Unconstrained Objects (Top View)",
-                               fixed_axes=axes_scale, elev=90, azim=0, persp=False)
+                               elev=90, azim=0, persp=False)
 
         # add the constraints (between random objects)
         if save_visualizations: # optionally create a string to put at middle of visualization
@@ -141,17 +149,14 @@ def generate_data(data_directory, run_name, num_datapoints, axes_scale=10,
         problem.add_constraint_proposition(no_overlap, weight=1)
         constraints_output.append(constraint_to_dict(constraint=no_overlap, weight=1))
         if save_visualizations:
-                description += str(no_overlap)
+            description += str(no_overlap)
 
         # solve the problem
         problem.solve()
 
         # post-solve processing
         for obj in objs:
-            # clip x and y coordinates to object_coord_range (solve might move objects very far)
-            obj.loc = np.clip(obj.loc, a_min=-object_coord_range, a_max=object_coord_range)
-            
-            # re-cast z-rotation to (-180,180)
+            # re-cast z-rotation to (-180,180): bound on angles is None for optimizer
             modded = obj.rot[2] % 360 # cast to (0,360)
             obj.rot[2] = modded if modded <= 180 else modded - 360
 
@@ -161,9 +166,9 @@ def generate_data(data_directory, run_name, num_datapoints, axes_scale=10,
         # optionally plot the final state and save figure
         if save_visualizations:
             problem.plot_on_ax(ax=ax[1][0], ax_title="Solved Objects (Perspective View)",
-                               fixed_axes=axes_scale, elev=30, azim=40, persp=True)
+                               elev=30, azim=40, persp=True)
             problem.plot_on_ax(ax=ax[1][1], ax_title="Solved Objects (Top View)",
-                               fixed_axes=axes_scale, elev=90, azim=0, persp=False)
+                               elev=90, azim=0, persp=False)
             file_name = os.path.join(figures_folder_name, f"{run_name}_visualization_{datapoint_id}.png")
             plt.figtext(x=0.1,y=0.39,s=description)
             plt.subplots_adjust(hspace=1)
@@ -183,14 +188,14 @@ def generate_data(data_directory, run_name, num_datapoints, axes_scale=10,
     with open(pkl_path, "wb") as f:
         pickle.dump(dataset, f)
 
-# generate_data(data_directory="./GeneratedData", run_name="Dataset10",
-#               num_datapoints=10, axes_scale=10,
+# generate_data(data_directory="./GeneratedData", run_name="Dataset5",
+#               num_datapoints=5,
 #               min_object_count=3, max_object_count=10,
 #               max_constraint_density=1.5,
 #               save_visualizations=True)
 
 def generate_data_multiprocess(data_directory, run_name, num_workers, num_datapoints_per_worker,
-                               axes_scale=10, min_object_count=3, max_object_count=10,
+                               min_object_count=3, max_object_count=10,
                                max_constraint_density=1.5, save_visualizations=False):
     """Multiprocessing version of generate_data, uses generate_data.
 
@@ -206,7 +211,7 @@ def generate_data_multiprocess(data_directory, run_name, num_workers, num_datapo
     # start all workers
     for i in range(num_workers):
         p = Process(target=generate_data, args=[temp_directory, f"Worker{i}", num_datapoints_per_worker,
-                                                axes_scale, min_object_count, max_object_count,
+                                                min_object_count, max_object_count,
                                                 max_constraint_density, save_visualizations])
         p.start()
         process_list.append(p)
@@ -247,7 +252,7 @@ def generate_data_multiprocess(data_directory, run_name, num_workers, num_datapo
     shutil.rmtree(temp_directory)
 
 if __name__ == "__main__":
-    generate_data_multiprocess(data_directory="./GeneratedData", run_name="Dataset20",
-                            num_workers=10, num_datapoints_per_worker=2,
-                            axes_scale=10, min_object_count=3, max_object_count=10,
+    generate_data_multiprocess(data_directory="./GeneratedData", run_name="Dataset10000",
+                            num_workers=10, num_datapoints_per_worker=1000,
+                            min_object_count=3, max_object_count=10,
                             max_constraint_density=1.5, save_visualizations=True)

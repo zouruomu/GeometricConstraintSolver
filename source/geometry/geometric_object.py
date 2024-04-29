@@ -60,6 +60,13 @@ class GeometricObject:
             It looks like [loc_x,loc_y,loc_z,rot_z].
         """
         return np.concatenate([self.loc[:2], self.rot[2:3]])
+    
+    def get_optimizable_attr_form(self):
+        """Get the meanings of the attributes that can be optimized in the form of a flat np.array.
+
+        NOTE: Attribute and dimension MUST be separated by "_"
+        """
+        return np.array(["loc_x", "loc_y", "rot_z"])
 
     def set_optimizable_attr(self, attr_array):
         """Set optimizable attributes with an np.array of the same form as one from get_optimizable_attr.

@@ -12,15 +12,23 @@ class Problem:
     is treated as constant and immovable.
 
     Attributes:
+        scene_{x,y}{min,max}: ints, the x and y bounds of the scene
+        scene_zmax: the "roof"/"ceiling" of the scene
         optimizable_objects: A dictionary of GeometricObjects that are optimizable, each with a unique id.
         constraint_propositions: A list of ConstraintPropositions between GeometricObjects that we want to satisfy.
         constraint_weights: A list of floats representing the weight of each constraint proposition at the same idx.
     """
-    def __init__(self):
+    def __init__(self, scene_xmin, scene_xmax, scene_ymin, scene_ymax, scene_zmax):
         """Create an empty problem."""
         self.optimizable_objects = []
         self.constraint_propositions = []
         self.constraint_weights = []
+        self.scene_xmin = scene_xmin
+        self.scene_xmax = scene_xmax
+        self.scene_ymin = scene_ymin
+        self.scene_ymax = scene_ymax
+        self.scene_zmin = 0
+        self.scene_zmax = scene_zmax
 
     def add_optimizable_object(self, object):
         """Add a GeometricObject to self.optimizable_objects.
@@ -77,10 +85,31 @@ class Problem:
             for i in range(len(self.constraint_propositions)):
                 total_badness += (self.constraint_propositions[i].badness() * self.constraint_weights[i])
             return total_badness
+        
+        # compute the bounds
+        bounds = []
+        for val in self.optimizable_objects[0].get_optimizable_attr_form():
+            attribute, dimension = val.split("_")
+            if attribute == "rot":
+                # bounds.append((-180,180))
+                bounds.append((None, None)) # will re-cast later, this is so that optimizer can do wrap-around easier
+            elif attribute == "loc":
+                if dimension == "x":
+                    bounds.append((self.scene_xmin, self.scene_xmax))
+                elif dimension == "y":
+                    bounds.append((self.scene_ymin, self.scene_ymax))
+                elif dimension == "z":
+                    bounds.append((self.scene_zmin, self.scene_zmax))
+                else:
+                    bounds.append((None, None))
+            else:
+                bounds.append((None, None))
+        bounds = bounds * len(self.optimizable_objects)
 
         # compute solution, changing objects every iteration along the way
         # solution = minimize(objective, x0=self._flatten_optimizable_parameters(), method="Nelder-Mead")
-        solution = minimize(objective, x0=self._flatten_optimizable_parameters(), method="powell")
+        solution = minimize(objective, x0=self._flatten_optimizable_parameters(),
+                            method="powell", bounds=bounds)
 
         # optionally print full optimization results
         if verbose:
@@ -89,7 +118,7 @@ class Problem:
         # set the objects to the final solution
         self._recover_optimizable_parameters(solution.x)
 
-    def plot_on_ax(self, ax, ax_title, fixed_axes=None, elev=30, azim=40, persp=True):
+    def plot_on_ax(self, ax, ax_title, elev=30, azim=40, persp=True):
         """Plot the problem with all optimizable objects on axis ax.
 
         This generates a 3D plot.
@@ -97,11 +126,20 @@ class Problem:
         Args:
             ax: matplotlib axes to plot on.
             ax_title: str, title of axes.
-            fixed_axes: If not None, all x/y/z-lims will be set to (-fixed_axes,fixed_axes).
             elev, azim: matplotlib 3D plot viewing angle.
         Returns:
             None. Modifies argument ax.
         """
+        # defining plotting loose margin amount
+        loose_margins = 3
+        plot_xmin = self.scene_xmin - loose_margins
+        plot_xmax = self.scene_xmax + loose_margins
+        plot_ymin = self.scene_ymin - loose_margins
+        plot_ymax = self.scene_ymax + loose_margins
+        plot_zmin = self.scene_zmin - loose_margins
+        plot_zmax = self.scene_zmax + loose_margins
+
+
         # define colors
         colors = list(mcolors.TABLEAU_COLORS.keys())
 
@@ -113,16 +151,24 @@ class Problem:
             color_idx += 1
             color_idx = color_idx % len(colors)
 
+        # plot bounds
+        ax.plot([plot_xmin, plot_xmax], [plot_ymin, plot_ymin], [0, 0], color="red")
+        ax.plot([plot_xmin, plot_xmax], [plot_ymax, plot_ymax], [0, 0], color="red")
+        ax.plot([plot_xmin, plot_xmin], [plot_ymin, plot_ymax], [0, 0], color="red")
+        ax.plot([plot_xmax, plot_xmax], [plot_ymin, plot_ymax], [0, 0], color="red")
+
         # configure plot info
         ax.set_title(ax_title, y=1.1)
         ax.set_xlabel("x")
         ax.set_ylabel("y")
         ax.set_zlabel("z")
         ax.legend(handles=legend_patchs, loc="upper right", bbox_to_anchor=(1.4,1))
-        if fixed_axes is not None:
-            ax.set_xlim(-fixed_axes,fixed_axes)
-            ax.set_ylim(-fixed_axes,fixed_axes)
-            ax.set_zlim(0,fixed_axes*2)
+        max_bound = max(abs(plot_xmin), abs(plot_xmax),
+                        abs(plot_ymin), abs(plot_ymax),
+                        abs(plot_zmin), abs(plot_zmax))
+        ax.set_xlim(-max_bound-3, max_bound+3)
+        ax.set_ylim(-max_bound-3, max_bound+3)
+        ax.set_zlim(0, max_bound*2)
 
         #configure view
         if persp:
