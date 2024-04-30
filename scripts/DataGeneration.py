@@ -14,7 +14,7 @@ sys.path.append(".")
 from source import *
 
 def generate_data(data_directory, run_name, num_datapoints,
-                  min_object_count=3, max_object_count=10,
+                  vacancy_percentage=0.5,
                   max_constraint_density=1.5, max_badness_tolerated=0.1,
                   save_visualizations=False):
     """Generate data mapping from initial objects and a list of constraint propositions to final/solved objects.
@@ -59,6 +59,10 @@ def generate_data(data_directory, run_name, num_datapoints,
     # define meta-configurations and all available constraints
     object_min_scale = 2
     object_max_scale = 580
+    scene_min_x_scale = 200
+    scene_max_x_scale = 600
+    scene_min_y_scale = 200
+    scene_max_y_scale = 600
     constraint_classes = [TranslationalAlignment, Target, Parallelism, Perpendicularity,
                           Proximity, Symmetry, Direction]
     constraint_choice_prob = np.array([1, 0.25, 0.25, 0.25, 1, 1, 1])
@@ -83,42 +87,56 @@ def generate_data(data_directory, run_name, num_datapoints,
         constraints_output = []
         solved_objects_output = []
 
-        # determine datapoint bounds and how many objects and contraints this datapoint will have
+        # determine datapoint bounds
         scene_xmin = 0
         scene_ymin = 0
-        scene_xmax = np.random.randint(low=200, high=600+1)
-        scene_ymax = np.random.randint(low=200, high=600+1)
-        num_objs = np.random.randint(low=min_object_count, high=max_object_count+1)
-        num_constraints = np.random.randint(low=num_objs, high=round(num_objs*max_constraint_density)+1)  
+        scene_xmax = np.random.randint(low=scene_min_x_scale, high=scene_max_x_scale+1)
+        scene_ymax = np.random.randint(low=scene_min_y_scale, high=scene_max_y_scale+1)
+        specific_max_scale = min(object_max_scale, scene_xmax, scene_ymax) # cannot have objects bigger than room
 
         # initialize problem and determine 
         problem = Problem(scene_xmin=scene_xmin, scene_xmax=scene_xmax,
                           scene_ymin=scene_ymin, scene_ymax=scene_ymax,
-                          scene_zmax=10)
+                          scene_zmax=600)
 
         # create the objects (random initialization, 50% of objects will be upright)
+        # keep adding objects until over 
         objs = []
-        for i in range(1,num_objs+1):
-            #create random object with problem specific max scale
-            specific_max_scale = min(object_max_scale, scene_xmax, scene_ymax) # cannot have objects bigger than room
+        scene_area = (scene_xmax - scene_xmin) * (scene_ymax - scene_ymin)
+        area_to_occupy = (1-vacancy_percentage) * scene_area
+        cur_occupied_area = 0
+        obj_counter = 0
+        while True:
+            # get object scale and update cur_occupied_area
             scale = np.random.uniform(low=object_min_scale, high=specific_max_scale, size=(3))
+            object_area = scale[0] * scale[1]
+            if cur_occupied_area + object_area > area_to_occupy:
+                break
+            cur_occupied_area += object_area
+            obj_counter += 1
+            # get object loc
             loc = [0,0,0]
-            max_padding = (scale[0]**2 + scale[1]**2)**(1/2)
-            max_padding = min(max_padding, (scene_xmax - scene_xmin)/2, (scene_ymax - scene_ymin)/2)
-            loc[0] = np.random.randint(low=scene_xmin+max_padding, high=scene_xmax-max_padding+1)
-            loc[1] = np.random.randint(low=scene_ymin+max_padding, high=scene_ymax-max_padding+1)
+            loc[0] = np.random.randint(low=scene_xmin, high=scene_xmax+1)
+            loc[1] = np.random.randint(low=scene_ymin, high=scene_ymax+1)
             loc[2] = scale[2]/2 # place on x-y plane
+            # get object rot
             rot = [0,0,0 if np.random.uniform() < 0.5 else np.random.uniform(low=-180, high=180)]
+            # create object
             obj = Cuboid(loc=loc,
                          rot=rot,
                          scale=scale,
-                         name=f"Cube{i}")
+                         name=f"Cube{obj_counter}")
             # add to list and problem
             objs.append(obj)
             problem.add_optimizable_object(obj)
             # add in dictionary form to initial_objs_output
             initial_objs_output.append(obj_to_dict(obj))
+        num_objs = len(objs)
         objs = np.array(objs)
+
+        # discard half-generated datapoint if too few objects
+        if num_objs < 3:
+            continue
 
         # optionally setup plot
         if save_visualizations:
@@ -127,6 +145,9 @@ def generate_data(data_directory, run_name, num_datapoints,
                                elev=30, azim=40, persp=True)
             problem.plot_on_ax(ax=ax[0][1], ax_title="Unconstrained Objects (Top View)",
                                elev=90, azim=-90, persp=False)
+
+                # get number of constraints to add
+        num_constraints = np.random.randint(low=num_objs, high=round(num_objs*max_constraint_density)+1) 
 
         # add the constraints (between random objects)
         for i in range(1,num_constraints): # num_constraints - 1 random constraints and 1 NoOverlap constraint
@@ -146,7 +167,7 @@ def generate_data(data_directory, run_name, num_datapoints,
             problem.add_constraint_proposition(constraint_obj, weight=constraint_weight)
 
         # add the NoOverlap constraint
-        problem.add_constraint_proposition(NoOverlap(arguments=objs), weight=1)
+        problem.add_constraint_proposition(NoOverlap(arguments=objs), weight=10)
 
         # solve the problem
         problem.solve()
@@ -217,13 +238,15 @@ def generate_data(data_directory, run_name, num_datapoints,
 
 # generate_data(data_directory="./GeneratedData", run_name="Dataset5",
 #               num_datapoints=5,
-#               min_object_count=3, max_object_count=10,
-#               max_constraint_density=1.5, max_badness_tolerated=0.1,
+#               vacancy_percentage=0.5,
+#               max_constraint_density=1.5,
+#               max_badness_tolerated=0.1,
 #               save_visualizations=True)
 
 def generate_data_multiprocess(data_directory, run_name, num_workers, num_datapoints_per_worker,
-                               min_object_count=3, max_object_count=10,
-                               max_constraint_density=1.5, max_badness_tolerated=0.1,
+                               vacancy_percentage=0.5,
+                               max_constraint_density=1.5,
+                               max_badness_tolerated=0.1,
                                save_visualizations=False):
     """Multiprocessing version of generate_data, uses generate_data.
 
@@ -239,8 +262,9 @@ def generate_data_multiprocess(data_directory, run_name, num_workers, num_datapo
     # start all workers
     for i in range(num_workers):
         p = Process(target=generate_data, args=[temp_directory, f"Worker{i}", num_datapoints_per_worker,
-                                                min_object_count, max_object_count,
-                                                max_constraint_density, max_badness_tolerated,
+                                                vacancy_percentage,
+                                                max_constraint_density,
+                                                max_badness_tolerated,
                                                 save_visualizations])
         p.start()
         process_list.append(p)
@@ -293,14 +317,14 @@ if __name__ == "__main__":
     if num_workers <= 1:
         generate_data(data_directory="./data", run_name="Dataset10000",
                       num_datapoints=5,
-                      min_object_count=3, max_object_count=10,
+                      vacancy_percentage=0.5,
                       max_constraint_density=1.5,
                       max_badness_tolerated=0.1,
                       save_visualizations=True)
     else:
         generate_data_multiprocess(data_directory="./data", run_name="Dataset10000",
                                    num_workers=num_workers, num_datapoints_per_worker=1000,
-                                   min_object_count=3, max_object_count=10,
+                                   vacancy_percentage=0.5,
                                    max_constraint_density=1.5,
                                    max_badness_tolerated=0.1,
                                    save_visualizations=save_visualizations)
