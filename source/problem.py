@@ -163,12 +163,16 @@ class Problem:
         ax.set_ylabel("y")
         ax.set_zlabel("z")
         ax.legend(handles=legend_patchs, loc="upper right", bbox_to_anchor=(1.4,1))
-        max_bound = max(abs(plot_xmin), abs(plot_xmax),
-                        abs(plot_ymin), abs(plot_ymax),
-                        abs(plot_zmin), abs(plot_zmax))
-        ax.set_xlim(-max_bound-3, max_bound+3)
-        ax.set_ylim(-max_bound-3, max_bound+3)
-        ax.set_zlim(0, max_bound*2)
+        # max_bound = max(abs(plot_xmin), abs(plot_xmax), # uncomment for range that spans both positive/negative
+        #                 abs(plot_ymin), abs(plot_ymax),
+        #                 abs(plot_zmin), abs(plot_zmax))
+        # ax.set_xlim(-max_bound-loose_margins, max_bound+loose_margins)
+        # ax.set_ylim(-max_bound-loose_margins, max_bound+loose_margins)
+        # ax.set_zlim(0, max_bound*2)
+        max_bound = max(abs(plot_xmax), abs(plot_ymax), abs(plot_zmax))
+        ax.set_xlim(0-loose_margins, max_bound+loose_margins)
+        ax.set_ylim(0-loose_margins, max_bound+loose_margins)
+        ax.set_zlim(0, max_bound+2*loose_margins)
 
         #configure view
         if persp:

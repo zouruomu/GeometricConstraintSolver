@@ -60,7 +60,7 @@ def generate_data(data_directory, run_name, num_datapoints,
     object_max_scale = 3
     constraint_classes = [TranslationalAlignment, Target, Parallelism, Perpendicularity,
                           Proximity, Symmetry, Direction]
-    constraint_choice_prob = np.array([1, 0.25, 0.25, 0.25, 0.25, 1, 1])
+    constraint_choice_prob = np.array([1, 0.25, 0.25, 0.25, 1, 1, 1])
     constraint_choice_prob = constraint_choice_prob / constraint_choice_prob.sum()
 
     # optionally setup folder to save figures in
@@ -81,10 +81,10 @@ def generate_data(data_directory, run_name, num_datapoints,
         solved_objects_output = []
 
         # determine datapoint bounds and how many objects and contraints this datapoint will have
-        scene_xmin = np.random.randint(low=-20, high=-10+1)
-        scene_ymin = np.random.randint(low=-20, high=-10+1)
-        scene_xmax = np.random.randint(low=10, high=20+1)
-        scene_ymax = np.random.randint(low=10, high=20+1)
+        scene_xmin = np.random.randint(low=0, high=10+1)
+        scene_ymin = np.random.randint(low=0, high=10+1)
+        scene_xmax = np.random.randint(low=30, high=40+1)
+        scene_ymax = np.random.randint(low=30, high=40+1)
         num_objs = np.random.randint(low=min_object_count, high=max_object_count+1)
         num_constraints = np.random.randint(low=num_objs, high=round(num_objs*max_constraint_density)+1)  
 
