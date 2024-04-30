@@ -132,7 +132,7 @@ def generate_data(data_directory, run_name, num_datapoints,
             constraint_class = np.random.choice(a=constraint_classes, p=constraint_choice_prob)
             constraint_arity = constraint_class.arity()
             if constraint_arity is None: # for flexible arity constraints
-                constraint_arity = np.random.randint(low=2, high=max(3,num_objs/2))
+                constraint_arity = np.random.randint(low=3, high=max(4,num_objs/2))
 
             # find random objects as arguments and find weight
             constraint_args = np.random.choice(a=objs, size=constraint_arity, replace=False)
