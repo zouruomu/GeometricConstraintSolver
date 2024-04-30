@@ -33,9 +33,9 @@ class Direction(ConstraintProposition):
         elif self.direction == "down":
             raise NotImplementedError
         elif self.direction == "front":
-            ref_vec = np.array([0, -1])
-        elif self.direction == "back":
             ref_vec = np.array([0, 1])
+        elif self.direction == "back":
+            ref_vec = np.array([0, -1])
         else:
             raise NotImplementedError
         return (np.dot(rel_vec, ref_vec) + 1) / 2
