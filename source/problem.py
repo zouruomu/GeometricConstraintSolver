@@ -88,23 +88,27 @@ class Problem:
         
         # compute the bounds
         bounds = []
-        for val in self.optimizable_objects[0].get_optimizable_attr_form():
-            attribute, dimension = val.split("_")
-            if attribute == "rot":
-                # bounds.append((-180,180))
-                bounds.append((None, None)) # will re-cast later, this is so that optimizer can do wrap-around easier
-            elif attribute == "loc":
-                if dimension == "x":
-                    bounds.append((self.scene_xmin, self.scene_xmax))
-                elif dimension == "y":
-                    bounds.append((self.scene_ymin, self.scene_ymax))
-                elif dimension == "z":
-                    bounds.append((self.scene_zmin, self.scene_zmax))
+        for obj in self.optimizable_objects:
+            for val in obj.get_optimizable_attr_form():
+                attribute, dimension = val.split("_")
+                if attribute == "rot":
+                    # bounds.append((-180,180))
+                    bounds.append((None, None)) # will re-cast later, this is so that optimizer can do wrap-around easier
+                elif attribute == "loc":
+                    max_padding_needed = (obj.scale[0]**2 + obj.scale[1]**2)**(1/2)
+                    max_padding_needed = min(max_padding_needed,
+                                             (self.scene_xmax - self.scene_xmin)/2 - 1,
+                                             (self.scene_ymax - self.scene_ymin)/2 - 1)
+                    if dimension == "x":
+                        bounds.append((self.scene_xmin+max_padding_needed, self.scene_xmax-max_padding_needed))
+                    elif dimension == "y":
+                        bounds.append((self.scene_ymin+max_padding_needed, self.scene_ymax-max_padding_needed))
+                    elif dimension == "z":
+                        bounds.append((self.scene_zmin+max_padding_needed, self.scene_zmax-max_padding_needed))
+                    else:
+                        bounds.append((None, None))
                 else:
                     bounds.append((None, None))
-            else:
-                bounds.append((None, None))
-        bounds = bounds * len(self.optimizable_objects)
 
         # compute solution, changing objects every iteration along the way
         # solution = minimize(objective, x0=self._flatten_optimizable_parameters(), method="Nelder-Mead")
