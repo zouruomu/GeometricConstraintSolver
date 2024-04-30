@@ -19,7 +19,7 @@ class Target(ConstraintProposition):
         """See superclass documentation for details.
         """
         displacement_vector = (self.arguments[1].loc - self.arguments[0].loc)[:2]
-        displacement_vector = displacement_vector / np.linalg.norm(displacement_vector)
+        displacement_vector = displacement_vector / (1e-8 + np.linalg.norm(displacement_vector))
         rad = np.deg2rad(self.arguments[0].rot[2])
         z_rot_vector = np.array([np.sin(rad), np.cos(rad)])
         return (1 + (z_rot_vector @ displacement_vector)) / 2

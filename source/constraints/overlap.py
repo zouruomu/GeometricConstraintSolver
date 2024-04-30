@@ -19,24 +19,43 @@ class NoOverlap(ConstraintProposition):
     def arity():
         return None # flexible-arity
 
+    def get_iou(self, obj1, obj2): # [[0,2,6,4],:2] get corners in correct order for Polygon
+        polygon1 = Polygon(obj1.get_corners()[[0,2,6,4],:2].tolist())
+        polygon2 = Polygon(obj2.get_corners()[[0,2,6,4],:2].tolist())
+        intersection = polygon1.intersection(polygon2)
+        iou = intersection.area / (polygon1.area + polygon2.area - intersection.area)
+        return iou
+
     def badness(self):
         """See superclass documentation for details.
         """
-        def get_iou(obj1, obj2): # [[0,2,6,4],:2] get corners in correct order for Polygon
-            polygon1 = Polygon(obj1.get_corners()[[0,2,6,4],:2].tolist())
-            polygon2 = Polygon(obj2.get_corners()[[0,2,6,4],:2].tolist())
-            intersection = polygon1.intersection(polygon2)
-            iou = intersection.area / (polygon1.area + polygon2.area - intersection.area)
-            return iou
         total_iou = 0
         for i in range(len(self.arguments)):
             for j in range(i, len(self.arguments)):
                 if i == j:
                     continue
-                total_iou += get_iou(self.arguments[i], self.arguments[j])
+                total_iou += self.get_iou(self.arguments[i], self.arguments[j])
         # FIXME: if total overlap area is too high, sacled_sigmoid looks like 1 everywhere in that neighborhood
         #        and optimizer has trouble, ideally there is a reasonable way to normalize this value
         return total_iou
+    
+    def avg_iou(self):
+        total_iou = 0
+        for i in range(len(self.arguments)):
+            for j in range(i, len(self.arguments)):
+                if i == j:
+                    continue
+                total_iou += self.get_iou(self.arguments[i], self.arguments[j])
+        return total_iou / (len(self.arguments) * (len(self.arguments) - 1))
+    
+    def all_iou(self):
+        ious = []
+        for i in range(len(self.arguments)):
+            for j in range(i, len(self.arguments)):
+                if i == j:
+                    continue
+                ious.append(self.get_iou(self.arguments[i], self.arguments[j]))
+        return ious
     
     def __str__(self) -> str:
         """To string method.

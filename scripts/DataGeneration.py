@@ -75,7 +75,9 @@ def generate_data(data_directory, run_name, num_datapoints,
     dataset = []
     
     # main datapoint generation loop
-    for datapoint_id in tqdm(range(num_datapoints)):
+    pbar = tqdm(total=num_datapoints)
+    datapoint_id = 0
+    while datapoint_id < num_datapoints:
         # create holders to be later put into a dictionary to output
         initial_objs_output = []
         constraints_output = []
@@ -161,36 +163,52 @@ def generate_data(data_directory, run_name, num_datapoints,
         # post-solve constraint processing: add ONLY satisfied constraints (with badness below max_badness_tolerated)
         if save_visualizations: # optionally create a string to put at middle of visualization
             description = ""
+
+        success = True
         for i in range(num_constraints):
             constraint = problem.constraint_propositions[i]
             weight = problem.constraint_weights[i]
-            if constraint.badness() > max_badness_tolerated:
-                continue
-            constraints_output.append(constraint_to_dict(constraint, weight))
+            if isinstance(constraint, NoOverlap):
+                all_iou = constraint.all_iou()
+                for iou in all_iou:
+                    if iou > 0.1:
+                        success = False
+                        break
+                if not success:
+                    break
+            else:
+                if constraint.badness() > max_badness_tolerated:
+                    continue
+                constraints_output.append(constraint_to_dict(constraint, weight))
+                if save_visualizations:
+                    description += str(constraint) + f" (badness after solving: {round(constraint.badness(),2)})\n"
+        
+        if success:
+            # optionally plot the final state and save figure
             if save_visualizations:
-                description += str(constraint) + f" (badness after solving: {round(constraint.badness(),2)})\n"
+                problem.plot_on_ax(ax=ax[1][0], ax_title="Solved Objects (Perspective View)",
+                                   elev=30, azim=40, persp=True)
+                problem.plot_on_ax(ax=ax[1][1], ax_title="Solved Objects (Top View)",
+                                   elev=90, azim=-90, persp=False)
+                file_name = os.path.join(figures_folder_name, f"{run_name}_visualization_{datapoint_id}.png")
+                plt.figtext(x=0.1,y=0.39,s=description)
+                plt.subplots_adjust(hspace=1)
+                plt.savefig(file_name)
+                plt.close()
 
-        # optionally plot the final state and save figure
-        if save_visualizations:
-            problem.plot_on_ax(ax=ax[1][0], ax_title="Solved Objects (Perspective View)",
-                               elev=30, azim=40, persp=True)
-            problem.plot_on_ax(ax=ax[1][1], ax_title="Solved Objects (Top View)",
-                               elev=90, azim=-90, persp=False)
-            file_name = os.path.join(figures_folder_name, f"{run_name}_visualization_{datapoint_id}.png")
-            plt.figtext(x=0.1,y=0.39,s=description)
-            plt.subplots_adjust(hspace=1)
-            plt.savefig(file_name)
-            plt.close()
-
-        # create dictionary for this datapoint and add to dataset
-        datapoint = {
-            "initial_objects":initial_objs_output,
-            "constraints":constraints_output,
-            "solved_objects":solved_objects_output,
-            "scene_x_bounds": (scene_xmin-object_max_scale, scene_xmax+object_max_scale),
-            "scene_y_bounds": (scene_ymin-object_max_scale, scene_ymax+object_max_scale)
-        }
-        dataset.append(datapoint)
+            # create dictionary for this datapoint and add to dataset
+            datapoint = {
+                "initial_objects":initial_objs_output,
+                "constraints":constraints_output,
+                "solved_objects":solved_objects_output,
+                "scene_x_bounds": (scene_xmin-object_max_scale, scene_xmax+object_max_scale),
+                "scene_y_bounds": (scene_ymin-object_max_scale, scene_ymax+object_max_scale)
+            }
+            dataset.append(datapoint)
+            pbar.update(1)
+            datapoint_id += 1
+        
+    pbar.close()
 
     # pickle dataset
     pkl_path = os.path.join(data_directory, f"{run_name}.pkl")

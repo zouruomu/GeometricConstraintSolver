@@ -23,7 +23,7 @@ class Direction(ConstraintProposition):
     def badness(self):
         obj1, obj2 = self.arguments
         rel_vec = (obj2.loc - obj1.loc)[:2]
-        rel_vec = rel_vec / np.linalg.norm(rel_vec)
+        rel_vec = rel_vec / (1e-8 + np.linalg.norm(rel_vec))
         if self.direction == "left":
             ref_vec = np.array([1, 0])
         elif self.direction == "right":
