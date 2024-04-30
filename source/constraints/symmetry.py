@@ -13,7 +13,7 @@ class Symmetry(ConstraintProposition):
 
     @staticmethod
     def arity():
-        return None
+        return (3, -1)
 
     def badness(self):
         x_badness = self._badness_along_axis(self.arguments, "x")
@@ -59,3 +59,6 @@ class Symmetry(ConstraintProposition):
             obj_names += f"{str(obj)}, "
         obj_names += f"and {str(self.arguments[-1])}"
         return f"{obj_names} must be symmetrical."
+    
+    def save_kwargs(self) -> dict:
+        return {"clamp": self.clamp}

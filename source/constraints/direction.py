@@ -11,9 +11,7 @@ class Direction(ConstraintProposition):
     """
     def __init__(self, arguments, direction: str = "random"):
         super().__init__(arguments)
-        assert direction in ["left", "right", "up", "down", "front", "back", "random"], "Invalid direction."
-        if direction == "random":
-            direction = np.random.choice(["left", "right", "front", "back"]) #FIXME: add z-axis
+        assert direction in ["left", "right", "up", "down", "front", "back"], "Invalid direction."
         self.direction = direction
 
     @staticmethod
@@ -42,3 +40,12 @@ class Direction(ConstraintProposition):
     
     def __str__(self) -> str:
         return f"{str(self.arguments[1])} must be on the {self.direction} of {str(self.arguments[0])}."
+
+    @classmethod
+    def random(cls, arguments):
+        # direction = np.random.choice(["left", "right", "up", "down", "front", "back"])
+        direction = np.random.choice(["left", "right", "front", "back"]) #FIXME: add z-axis
+        return cls(arguments, direction=direction)
+    
+    def save_kwargs(self) -> dict:
+        return {"direction": self.direction}

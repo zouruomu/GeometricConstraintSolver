@@ -31,9 +31,17 @@ class ConstraintProposition:
         """
         arguments = list(arguments)
         # check to make sure list has correct arity
-        if self.arity() is not None and len(arguments) != self.arity():
-            raise ValueError(f"Input args has arity {len(arguments)}, but constraint was defined with arity {self.arity()}.")
-
+        arity = self.arity()
+        if isinstance(arity, int) and arity != -1:
+            if len(arguments) != arity:
+                raise ValueError(f"Input args has arity {len(arguments)}, but constraint was defined with arity {arity}.")
+        elif isinstance(arity, tuple):
+            assert len(arity) == 2
+            low, high = arity
+            if low != -1:
+                assert len(arguments) >= low, f"Input args has arity {len(arguments)}, but constraint was defined with arity {arity}."
+            if high != -1:
+                assert len(arguments) <= high, f"Input args has arity {len(arguments)}, but constraint was defined with arity {arity}."
         # if it does, store as attribute
         self.arguments = arguments
 
@@ -71,3 +79,17 @@ class ConstraintProposition:
         """To string method.
         """
         raise NotImplementedError
+    
+    @classmethod
+    def random(cls, arguments):
+        return cls(arguments)
+    
+    def save_kwargs(self) -> dict:
+        return {}
+    
+    def save(self) -> dict:
+        return {
+            "type": self.__class__.__name__,
+            "arguments": [arg.name for arg in self.arguments],
+            "kwargs": self.save_kwargs(),
+        }

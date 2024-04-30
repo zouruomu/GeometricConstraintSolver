@@ -29,15 +29,10 @@ class TranslationalAlignment(ConstraintProposition):
         super().__init__(arguments)
 
         # check to make sure dimension and location are valid
-        if dimension not in ["x", "y", "z", "random"]:
-            raise ValueError(f"Argument 'dimension' must be one of 'x', 'y', 'z', or 'random'.")
-        if location not in ["bounding_min", "bounding_max", "center", "random"]:
-            raise ValueError(f"Argument 'dimension' must be one of 'bounding_min', 'bounding_max', 'center', or 'random'.")
-        
-        if dimension == "random":
-            dimension = np.random.choice(["x", "y", "z"])
-        if location == "random":
-            location = np.random.choice(["bounding_min", "bounding_max", "center"])
+        if dimension not in ["x", "y", "z"]:
+            raise ValueError(f"Argument 'dimension' must be one of 'x', 'y', 'z'.")
+        if location not in ["bounding_min", "bounding_max", "center"]:
+            raise ValueError(f"Argument 'dimension' must be one of 'bounding_min', 'bounding_max', 'center'.")
 
         # store attributes
         self.dimension = dimension
@@ -45,7 +40,7 @@ class TranslationalAlignment(ConstraintProposition):
 
     @staticmethod
     def arity():
-        return None # flexible-arity
+        return (2, -1)
 
     def badness(self):
         """See superclass documentation for details.
@@ -83,6 +78,16 @@ class TranslationalAlignment(ConstraintProposition):
             obj_names += f"{str(obj)}, "
         obj_names += f"and {str(self.arguments[-1])}"
         return f"{obj_names} must be aligned along their {loc} {self.dimension}-axis values."
+    
+    @classmethod
+    def random(cls, arguments):
+        dimension = np.random.choice(["x", "y", "z"])
+        location = np.random.choice(["bounding_min", "bounding_max", "center"])
+        
+        return cls(arguments, dimension=dimension, location=location)
+    
+    def save_kwargs(self) -> dict:
+        return {"dimension": self.dimension, "location": self.location}
     
 
 # class RotationalAlignment(ConstraintProposition):

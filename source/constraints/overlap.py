@@ -17,7 +17,7 @@ class NoOverlap(ConstraintProposition):
 
     @staticmethod
     def arity():
-        return None # flexible-arity
+        return -1
 
     def get_iou(self, obj1, obj2): # [[0,2,6,4],:2] get corners in correct order for Polygon
         polygon1 = Polygon(obj1.get_corners()[[0,2,6,4],:2].tolist())
@@ -65,3 +65,7 @@ class NoOverlap(ConstraintProposition):
             obj_names += f"{str(obj)}, "
         obj_names += f"and {str(self.arguments[-1])}"
         return f"{obj_names} must not overlap."
+    
+    @classmethod
+    def random(cls, arguments):
+        raise ValueError("Random generation of NoOverlap constraint is not supported.")

@@ -50,19 +50,21 @@ def generate_data(data_directory, run_name, num_datapoints,
     # define function to convert constraint to dictionary according to given specifications
     def constraint_to_dict(constraint, weight):
         constraint_dict = {
-            "constraint": str(constraint),
+            "text": str(constraint),
+            "constraint": constraint.save(),
             "weight": weight,
             "final_badness": constraint.badness()
         }
         return constraint_dict
     
     # define meta-configurations and all available constraints
-    object_min_scale = 2
-    object_max_scale = 580
-    scene_min_x_scale = 200
-    scene_max_x_scale = 600
-    scene_min_y_scale = 200
-    scene_max_y_scale = 600
+    object_min_scale = 2 / 10.
+    object_max_scale = 580 / 10.
+    scene_min_x_scale = 200 / 10.
+    scene_max_x_scale = 600 / 10.
+    scene_min_y_scale = 200 / 10.
+    scene_max_y_scale = 600 / 10.
+    scene_zmax = 600 / 10.
     constraint_classes = [TranslationalAlignment, Target, Parallelism, Perpendicularity,
                           Proximity, Symmetry, Direction]
     constraint_choice_prob = np.array([1, 0.25, 0.25, 0.25, 1, 1, 1])
@@ -97,7 +99,7 @@ def generate_data(data_directory, run_name, num_datapoints,
         # initialize problem and determine 
         problem = Problem(scene_xmin=scene_xmin, scene_xmax=scene_xmax,
                           scene_ymin=scene_ymin, scene_ymax=scene_ymax,
-                          scene_zmax=600)
+                          scene_zmax=scene_zmax)
 
         # create the objects (random initialization, 50% of objects will be upright)
         # keep adding objects until over 
@@ -125,7 +127,7 @@ def generate_data(data_directory, run_name, num_datapoints,
             obj = Cuboid(loc=loc,
                          rot=rot,
                          scale=scale,
-                         name=f"Cube{obj_counter}")
+                         name=f"item_{obj_counter}")
             # add to list and problem
             objs.append(obj)
             problem.add_optimizable_object(obj)
@@ -154,8 +156,19 @@ def generate_data(data_directory, run_name, num_datapoints,
             # find random constraint
             constraint_class = np.random.choice(a=constraint_classes, p=constraint_choice_prob)
             constraint_arity = constraint_class.arity()
-            if constraint_arity is None: # for flexible arity constraints
-                constraint_arity = np.random.randint(low=3, high=max(4,num_objs/2))
+            if isinstance(constraint_arity, int):
+                ...
+            elif isinstance(constraint_arity, tuple):
+                assert len(constraint_arity) == 2
+                low = constraint_arity[0]
+                high = constraint_arity[1]
+                if low == -1:
+                    raise ValueError("Cannot have low=-1 in tuple constraint_arity")
+                if high == -1:
+                    high = max(4,num_objs/2)
+                constraint_arity = np.random.randint(low=low, high=high)
+            else:
+                raise ValueError("constraint_arity must be int or tuple of ints")
 
             # find random objects as arguments and find weight
             constraint_args = np.random.choice(a=objs, size=constraint_arity, replace=False)
@@ -163,7 +176,7 @@ def generate_data(data_directory, run_name, num_datapoints,
             # constraint_weight = np.random.choice([0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.0]) # random weight
 
             # create constraint object and add to problem (will add to output later, after postfix)
-            constraint_obj = constraint_class(arguments=constraint_args)
+            constraint_obj = constraint_class.random(arguments=constraint_args)
             problem.add_constraint_proposition(constraint_obj, weight=constraint_weight)
 
         # add the NoOverlap constraint
@@ -192,7 +205,7 @@ def generate_data(data_directory, run_name, num_datapoints,
             if isinstance(constraint, NoOverlap):
                 all_iou = constraint.all_iou()
                 for iou in all_iou:
-                    if iou > 0.1:
+                    if iou > 0.01:
                         success = False
                         break
                 if not success:
@@ -204,6 +217,9 @@ def generate_data(data_directory, run_name, num_datapoints,
                 if save_visualizations:
                     description += str(constraint) + f" (badness after solving: {round(constraint.badness(),2)})\n"
         
+        if len(constraints_output) == 0:
+            success = False
+
         if success:
             # optionally plot the final state and save figure
             if save_visualizations:
@@ -222,8 +238,8 @@ def generate_data(data_directory, run_name, num_datapoints,
                 "initial_objects":initial_objs_output,
                 "constraints":constraints_output,
                 "solved_objects":solved_objects_output,
-                "scene_x_bounds": (scene_xmin-object_max_scale, scene_xmax+object_max_scale),
-                "scene_y_bounds": (scene_ymin-object_max_scale, scene_ymax+object_max_scale)
+                "scene_x_bounds": (scene_xmin, scene_xmax),
+                "scene_y_bounds": (scene_ymin, scene_ymax)
             }
             dataset.append(datapoint)
             pbar.update(1)
@@ -315,7 +331,7 @@ if __name__ == "__main__":
     num_workers = args.num_workers
     save_visualizations = args.save_visualizations
     if num_workers <= 1:
-        generate_data(data_directory="./data", run_name="Dataset10000",
+        generate_data(data_directory="./data", run_name="Dataset5",
                       num_datapoints=5,
                       vacancy_percentage=0.5,
                       max_constraint_density=1.5,
