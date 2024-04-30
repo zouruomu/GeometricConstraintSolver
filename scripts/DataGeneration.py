@@ -15,7 +15,7 @@ from source import *
 
 def generate_data(data_directory, run_name, num_datapoints,
                   min_object_count=3, max_object_count=10,
-                  max_constraint_density=1.5,
+                  max_constraint_density=1.5, max_badness_tolerated=0.1,
                   save_visualizations=False):
     """Generate data mapping from initial objects and a list of constraint propositions to final/solved objects.
 
@@ -50,7 +50,8 @@ def generate_data(data_directory, run_name, num_datapoints,
     def constraint_to_dict(constraint, weight):
         constraint_dict = {
             "constraint": str(constraint),
-            "weight": weight
+            "weight": weight,
+            "final_badness": constraint.badness()
         }
         return constraint_dict
     
@@ -119,41 +120,32 @@ def generate_data(data_directory, run_name, num_datapoints,
             problem.plot_on_ax(ax=ax[0][0], ax_title="Unconstrained Objects (Perspective View)",
                                elev=30, azim=40, persp=True)
             problem.plot_on_ax(ax=ax[0][1], ax_title="Unconstrained Objects (Top View)",
-                               elev=90, azim=0, persp=False)
+                               elev=90, azim=-90, persp=False)
 
         # add the constraints (between random objects)
-        if save_visualizations: # optionally create a string to put at middle of visualization
-            description = ""
         for i in range(1,num_constraints): # num_constraints - 1 random constraints and 1 NoOverlap constraint
             # find random constraint
             constraint_class = np.random.choice(a=constraint_classes, p=constraint_choice_prob)
             constraint_arity = constraint_class.arity()
             if constraint_arity is None: # for flexible arity constraints
-                constraint_arity = np.random.randint(low=1, high=max(2,num_objs/2))
+                constraint_arity = np.random.randint(low=2, high=max(3,num_objs/2))
 
             # find random objects as arguments and find weight
             constraint_args = np.random.choice(a=objs, size=constraint_arity, replace=False)
             constraint_weight = 1 # same weight for all
             # constraint_weight = np.random.choice([0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.0]) # random weight
 
-            # create constraint object, add to problem, constraints_output, and optionally update description
+            # create constraint object and add to problem (will add to output later, after postfix)
             constraint_obj = constraint_class(arguments=constraint_args)
             problem.add_constraint_proposition(constraint_obj, weight=constraint_weight)
-            constraints_output.append(constraint_to_dict(constraint=constraint_obj, weight=constraint_weight))
-            if save_visualizations:
-                description += str(constraint_obj) + "\n"
 
         # add the NoOverlap constraint
-        no_overlap = NoOverlap(arguments=objs)
-        problem.add_constraint_proposition(no_overlap, weight=1)
-        constraints_output.append(constraint_to_dict(constraint=no_overlap, weight=1))
-        if save_visualizations:
-            description += str(no_overlap)
+        problem.add_constraint_proposition(NoOverlap(arguments=objs), weight=1)
 
         # solve the problem
         problem.solve()
 
-        # post-solve processing
+        # post-solve object processing
         for obj in objs:
             # re-cast z-rotation to (-180,180): bound on angles is None for optimizer
             modded = obj.rot[2] % 360 # cast to (0,360)
@@ -162,12 +154,24 @@ def generate_data(data_directory, run_name, num_datapoints,
             # add the solved objects to solved_objects_output
             solved_objects_output.append(obj_to_dict(obj))
 
+        # post-solve constraint processing: add ONLY satisfied constraints (with badness below max_badness_tolerated)
+        if save_visualizations: # optionally create a string to put at middle of visualization
+            description = ""
+        for i in range(num_constraints):
+            constraint = problem.constraint_propositions[i]
+            weight = problem.constraint_weights[i]
+            if constraint.badness() > max_badness_tolerated:
+                continue
+            constraints_output.append(constraint_to_dict(constraint, weight))
+            if save_visualizations:
+                description += str(constraint) + f" (badness after solving: {round(constraint.badness(),2)})\n"
+
         # optionally plot the final state and save figure
         if save_visualizations:
             problem.plot_on_ax(ax=ax[1][0], ax_title="Solved Objects (Perspective View)",
                                elev=30, azim=40, persp=True)
             problem.plot_on_ax(ax=ax[1][1], ax_title="Solved Objects (Top View)",
-                               elev=90, azim=0, persp=False)
+                               elev=90, azim=-90, persp=False)
             file_name = os.path.join(figures_folder_name, f"{run_name}_visualization_{datapoint_id}.png")
             plt.figtext(x=0.1,y=0.39,s=description)
             plt.subplots_adjust(hspace=1)
@@ -192,12 +196,13 @@ def generate_data(data_directory, run_name, num_datapoints,
 # generate_data(data_directory="./GeneratedData", run_name="Dataset5",
 #               num_datapoints=5,
 #               min_object_count=3, max_object_count=10,
-#               max_constraint_density=1.5,
+#               max_constraint_density=1.5, max_badness_tolerated=0.1,
 #               save_visualizations=True)
 
 def generate_data_multiprocess(data_directory, run_name, num_workers, num_datapoints_per_worker,
                                min_object_count=3, max_object_count=10,
-                               max_constraint_density=1.5, save_visualizations=False):
+                               max_constraint_density=1.5, max_badness_tolerated=0.1,
+                               save_visualizations=False):
     """Multiprocessing version of generate_data, uses generate_data.
 
     NOTE: Total datapoints generated will be num_workers * num_datapoints_per_worker
@@ -213,7 +218,8 @@ def generate_data_multiprocess(data_directory, run_name, num_workers, num_datapo
     for i in range(num_workers):
         p = Process(target=generate_data, args=[temp_directory, f"Worker{i}", num_datapoints_per_worker,
                                                 min_object_count, max_object_count,
-                                                max_constraint_density, save_visualizations])
+                                                max_constraint_density, max_badness_tolerated,
+                                                save_visualizations])
         p.start()
         process_list.append(p)
 
@@ -267,9 +273,12 @@ if __name__ == "__main__":
                       num_datapoints=10000,
                       min_object_count=3, max_object_count=10,
                       max_constraint_density=1.5,
+                      max_badness_tolerated=0.1,
                       save_visualizations=save_visualizations)
     else:
         generate_data_multiprocess(data_directory="./data", run_name="Dataset10000",
-                            num_workers=num_workers, num_datapoints_per_worker=1000,
-                            min_object_count=3, max_object_count=10,
-                            max_constraint_density=1.5, save_visualizations=save_visualizations)
+                                   num_workers=num_workers, num_datapoints_per_worker=1000,
+                                   min_object_count=3, max_object_count=10,
+                                   max_constraint_density=1.5,
+                                   max_badness_tolerated=0.1,
+                                   save_visualizations=save_visualizations)

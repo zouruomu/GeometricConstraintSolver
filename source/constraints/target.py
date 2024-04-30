@@ -27,4 +27,4 @@ class Target(ConstraintProposition):
     def __str__(self) -> str:
         """To string method.
         """
-        return f"{str(self.arguments[0])} must be targeting at {str(self.arguments[1])} in z-rotation."
+        return f"{str(self.arguments[0])} must be targeting {str(self.arguments[1])} in z-rotation."

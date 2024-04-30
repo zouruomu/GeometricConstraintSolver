@@ -22,7 +22,7 @@ class Perpendicularity(ConstraintProposition):
         theta1 = self.arguments[1].rot[2] / 180 * np.pi
         diff = abs(theta0 - theta1)
         cos = np.cos(diff)
-        return cos
+        return (cos+1)/2
 
     
     def __str__(self) -> str:
