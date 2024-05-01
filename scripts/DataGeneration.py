@@ -8,6 +8,7 @@ import pickle
 import multiprocessing
 from multiprocessing import Process
 import argparse
+from copy import deepcopy
 
 import sys
 sys.path.append(".")
@@ -133,6 +134,7 @@ def generate_data(data_directory, run_name, num_datapoints,
             problem.add_optimizable_object(obj)
             # add in dictionary form to initial_objs_output
             initial_objs_output.append(obj_to_dict(obj))
+            initial_objs_output = deepcopy(initial_objs_output)
         num_objs = len(objs)
         objs = np.array(objs)
 
@@ -330,6 +332,11 @@ if __name__ == "__main__":
     args = parse_args()
     num_workers = args.num_workers
     save_visualizations = args.save_visualizations
+
+    total = 10000
+    if total % num_workers != 0:
+        raise ValueError("total must be divisible by num_workers")
+    num_datapoints_per_worker = total // num_workers
     if num_workers <= 1:
         generate_data(data_directory="./data", run_name="Dataset5",
                       num_datapoints=5,
@@ -338,8 +345,8 @@ if __name__ == "__main__":
                       max_badness_tolerated=0.1,
                       save_visualizations=True)
     else:
-        generate_data_multiprocess(data_directory="./data", run_name="Dataset10000",
-                                   num_workers=num_workers, num_datapoints_per_worker=1000,
+        generate_data_multiprocess(data_directory="./data", run_name=f"Dataset{total}",
+                                   num_workers=num_workers, num_datapoints_per_worker=num_datapoints_per_worker,
                                    vacancy_percentage=0.5,
                                    max_constraint_density=1.5,
                                    max_badness_tolerated=0.1,

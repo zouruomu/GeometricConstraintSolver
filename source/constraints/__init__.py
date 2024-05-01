@@ -6,3 +6,4 @@ from .perpendicularity import *
 from .parallelism import *
 from .overlap import *
 from .direction import Direction
+from .cover import Cover

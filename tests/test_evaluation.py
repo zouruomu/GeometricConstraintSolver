@@ -6,4 +6,5 @@ def test_evaluation():
     for datapoint in range(min(10, len(dataset))):
         init_score = evaluate(dataset[datapoint]["initial_objects"], dataset[datapoint]["constraints"])
         solved_score = evaluate(dataset[datapoint]["solved_objects"], dataset[datapoint]["constraints"])
-        assert solved_score <= init_score
+        print(init_score, solved_score)
+        assert solved_score < init_score
