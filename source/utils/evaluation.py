@@ -3,7 +3,7 @@ import warnings
 warnings.filterwarnings('ignore')
 from itertools import product, combinations
 import numpy as np
-import scipy
+from collections import defaultdict
 from scipy.spatial.transform import Rotation as R
 from scipy.optimize import minimize, basinhopping
 import matplotlib
@@ -26,7 +26,7 @@ print(evaluate(dataset[datapoint]["initial_objects"], dataset[datapoint]["constr
 print(evaluate(dataset[datapoint]["solved_objects"], dataset[datapoint]["constraints"]))
 """
 
-def evaluate(objs_dict_list, constraints_dict_list):
+def evaluate(objs_dict_list, constraints_dict_list, return_each_badness=False):
     constraint_module = import_module("...constraints", package=__name__)
     def dict_to_obj(dict):
         name = dict["name"]
@@ -49,9 +49,16 @@ def evaluate(objs_dict_list, constraints_dict_list):
 
     name_obj_map = dict_list_to_name_obj_map(objs_dict_list)
     total_badness = 0
+
+    each_badness = defaultdict(list)
+
     for constraint_dict in constraints_dict_list:
         constraint, weight = dict_to_constraint(constraint_dict, name_obj_map)
         assert weight == 1
-        total_badness += constraint.badness() * weight
+        each_badness[constraint.__class__.__name__].append(constraint.badness() * weight)
+    avg_badness = {k: np.mean(v) for k, v in each_badness.items()}
+    total_badness = sum([v for k, v in avg_badness.items()])
 
+    if return_each_badness:
+        return total_badness, each_badness
     return total_badness
