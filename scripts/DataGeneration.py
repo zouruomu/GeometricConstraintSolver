@@ -5,18 +5,22 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 import shutil
 import pickle
-import multiprocessing
-from multiprocessing import Process
+from multiprocessing import Pool
+from functools import partial
 import argparse
 from copy import deepcopy
+import random
+import numpy as np
 
 import sys
 sys.path.append(".")
 from source import *
 
-def generate_data(data_directory, run_name, num_datapoints,
-                  vacancy_percentage=0.5,
-                  max_constraint_density=1.5, max_badness_tolerated=0.1,
+def generate_data(datapoint_id,
+                  data_directory, 
+                  run_name,
+                  max_constraint_density=1.5,
+                  max_badness_tolerated=0.1,
                   save_visualizations=False):
     """Generate data mapping from initial objects and a list of constraint propositions to final/solved objects.
 
@@ -38,6 +42,8 @@ def generate_data(data_directory, run_name, num_datapoints,
     Returns:
         None.
     """
+    random.seed(datapoint_id)
+    np.random.seed(datapoint_id)
     # define function to convert object to dictionary according to given specifications
     def obj_to_dict(obj):
         obj_dict = {
@@ -71,20 +77,11 @@ def generate_data(data_directory, run_name, num_datapoints,
     constraint_choice_prob = np.array([1, 0.25, 0.25, 0.25, 1, 1, 1])
     constraint_choice_prob = constraint_choice_prob / constraint_choice_prob.sum()
 
-    # optionally setup folder to save figures in
     if save_visualizations:
         figures_folder_name = os.path.join(data_directory, f"{run_name}_visualizations/")
-        if os.path.exists(figures_folder_name):
-            shutil.rmtree(figures_folder_name)
-        os.makedirs(figures_folder_name)
-
-    # create holder for final dataset to pickle
-    dataset = []
     
     # main datapoint generation loop
-    pbar = tqdm(total=num_datapoints)
-    datapoint_id = 0
-    while datapoint_id < num_datapoints:
+    while True:
         # create holders to be later put into a dictionary to output
         initial_objs_output = []
         constraints_output = []
@@ -106,6 +103,7 @@ def generate_data(data_directory, run_name, num_datapoints,
         # keep adding objects until over 
         objs = []
         scene_area = (scene_xmax - scene_xmin) * (scene_ymax - scene_ymin)
+        vacancy_percentage = np.random.uniform(low=0.3, high=0.5)
         area_to_occupy = (1-vacancy_percentage) * scene_area
         cur_occupied_area = 0
         obj_counter = 0
@@ -134,7 +132,7 @@ def generate_data(data_directory, run_name, num_datapoints,
             problem.add_optimizable_object(obj)
             # add in dictionary form to initial_objs_output
             initial_objs_output.append(obj_to_dict(obj))
-            initial_objs_output = deepcopy(initial_objs_output)
+        initial_objs_output = deepcopy(initial_objs_output)
         num_objs = len(objs)
         objs = np.array(objs)
 
@@ -142,15 +140,7 @@ def generate_data(data_directory, run_name, num_datapoints,
         if num_objs < 3:
             continue
 
-        # optionally setup plot
-        if save_visualizations:
-            fig, ax = plt.subplots(nrows=2, ncols=2, figsize=(12,12), subplot_kw={"projection": "3d"})
-            problem.plot_on_ax(ax=ax[0][0], ax_title="Unconstrained Objects (Perspective View)",
-                               elev=30, azim=40, persp=True)
-            problem.plot_on_ax(ax=ax[0][1], ax_title="Unconstrained Objects (Top View)",
-                               elev=90, azim=-90, persp=False)
-
-                # get number of constraints to add
+        # get number of constraints to add
         num_constraints = np.random.randint(low=num_objs, high=round(num_objs*max_constraint_density)+1) 
 
         # add the constraints (between random objects)
@@ -225,6 +215,11 @@ def generate_data(data_directory, run_name, num_datapoints,
         if success:
             # optionally plot the final state and save figure
             if save_visualizations:
+                fig, ax = plt.subplots(nrows=2, ncols=2, figsize=(12,12), subplot_kw={"projection": "3d"})
+                problem.plot_on_ax(ax=ax[0][0], ax_title="Unconstrained Objects (Perspective View)",
+                                elev=30, azim=40, persp=True)
+                problem.plot_on_ax(ax=ax[0][1], ax_title="Unconstrained Objects (Top View)",
+                                elev=90, azim=-90, persp=False)
                 problem.plot_on_ax(ax=ax[1][0], ax_title="Solved Objects (Perspective View)",
                                    elev=30, azim=40, persp=True)
                 problem.plot_on_ax(ax=ax[1][1], ax_title="Solved Objects (Top View)",
@@ -243,16 +238,9 @@ def generate_data(data_directory, run_name, num_datapoints,
                 "scene_x_bounds": (scene_xmin, scene_xmax),
                 "scene_y_bounds": (scene_ymin, scene_ymax)
             }
-            dataset.append(datapoint)
-            pbar.update(1)
-            datapoint_id += 1
+            break
         
-    pbar.close()
-
-    # pickle dataset
-    pkl_path = os.path.join(data_directory, f"{run_name}.pkl")
-    with open(pkl_path, "wb") as f:
-        pickle.dump(dataset, f)
+    return datapoint
 
 # generate_data(data_directory="./GeneratedData", run_name="Dataset5",
 #               num_datapoints=5,
@@ -261,93 +249,44 @@ def generate_data(data_directory, run_name, num_datapoints,
 #               max_badness_tolerated=0.1,
 #               save_visualizations=True)
 
-def generate_data_multiprocess(data_directory, run_name, num_workers, num_datapoints_per_worker,
-                               vacancy_percentage=0.5,
-                               max_constraint_density=1.5,
-                               max_badness_tolerated=0.1,
-                               save_visualizations=False):
-    """Multiprocessing version of generate_data, uses generate_data.
-
-    NOTE: Total datapoints generated will be num_workers * num_datapoints_per_worker
-    """
-    # setup
-    temp_directory = os.path.join(data_directory, f"temp")
-    if os.path.exists(temp_directory):
-        shutil.rmtree(temp_directory)
-    os.makedirs(temp_directory)
-    process_list = []
-
-    # start all workers
-    for i in range(num_workers):
-        p = Process(target=generate_data, args=[temp_directory, f"Worker{i}", num_datapoints_per_worker,
-                                                vacancy_percentage,
-                                                max_constraint_density,
-                                                max_badness_tolerated,
-                                                save_visualizations])
-        p.start()
-        process_list.append(p)
-
-    # join workers
-    for process in process_list:
-        process.join()
-
-    # when done, combined pickled data
-    all_data = []
-    for i in range(num_workers):
-        pickle_file = os.path.join(temp_directory, f"Worker{i}.pkl")
-        with open(pickle_file, "rb") as f:
-            cur_data = pickle.load(f)
-        all_data += cur_data
-
-    # re-pickle combined dataset
-    pkl_path = os.path.join(data_directory, f"{run_name}.pkl")
-    with open(pkl_path, "wb") as f:
-        pickle.dump(all_data, f)
-    
-    # optionally combined all visualizations
+def generate_dataset(num_workers: int, num_datapoints: int = 5, save_visualizations: bool = False):
+    data_directory = "./data"
+    run_name = f"Dataset{num_datapoints}"
+    generate_func = partial(generate_data,
+                            data_directory=data_directory,
+                            run_name=run_name,
+                            max_constraint_density=1.5,
+                            max_badness_tolerated=0.1,
+                            save_visualizations=save_visualizations)
+    shutil.rmtree(run_name, ignore_errors=True)
+    # optionally setup folder to save figures in
     if save_visualizations:
-        # make new folder for combined visualizations
-        figures_folder_dir = os.path.join(data_directory, f"{run_name}_visualizations/")
-        if os.path.exists(figures_folder_dir):
-            shutil.rmtree(figures_folder_dir)
-        os.makedirs(figures_folder_dir)
+        figures_folder_name = os.path.join(data_directory, f"{run_name}_visualizations/")
+        if os.path.exists(figures_folder_name):
+            shutil.rmtree(figures_folder_name)
+        os.makedirs(figures_folder_name)
+        
+    if num_workers <= 1:
+        dataset = []
+        for i in range(num_datapoints):
+            dataset.append(generate_func(i))
+    else:
+        with Pool(num_workers) as pool:
+            dataset = list(tqdm(pool.imap(generate_func, range(num_datapoints)), total=num_datapoints))
 
-        # loop through all temp folders
-        for i in range(num_workers):
-            temp_vis_dir = os.path.join(temp_directory, f"Worker{i}_visualizations/")
-            for img_name in os.listdir(temp_vis_dir):
-                img_dir = os.path.join(temp_vis_dir, img_name)
-                shutil.move(img_dir, figures_folder_dir)
+    pickle.dump(dataset, open(os.path.join(data_directory, f"{run_name}.pkl"), "wb"))
 
-    # finally remove entire temp directory
-    shutil.rmtree(temp_directory)
-    
+
 def parse_args():
     args = argparse.ArgumentParser()
     args.add_argument("--num_workers", type=int, default=0)
     args.add_argument("--save_visualizations", action="store_true")
+    args.add_argument("--num_datapoints", type=int, default=10000)
     return args.parse_args()
 
 if __name__ == "__main__":
     args = parse_args()
     num_workers = args.num_workers
     save_visualizations = args.save_visualizations
-
-    total = 10000
-    if total % num_workers != 0:
-        raise ValueError("total must be divisible by num_workers")
-    num_datapoints_per_worker = total // num_workers
-    if num_workers <= 1:
-        generate_data(data_directory="./data", run_name="Dataset5",
-                      num_datapoints=5,
-                      vacancy_percentage=0.5,
-                      max_constraint_density=1.5,
-                      max_badness_tolerated=0.1,
-                      save_visualizations=True)
-    else:
-        generate_data_multiprocess(data_directory="./data", run_name=f"Dataset{total}",
-                                   num_workers=num_workers, num_datapoints_per_worker=num_datapoints_per_worker,
-                                   vacancy_percentage=0.5,
-                                   max_constraint_density=1.5,
-                                   max_badness_tolerated=0.1,
-                                   save_visualizations=save_visualizations)
+    
+    generate_dataset(num_workers=num_workers, num_datapoints=args.num_datapoints, save_visualizations=save_visualizations)
