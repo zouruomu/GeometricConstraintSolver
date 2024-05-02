@@ -9,6 +9,8 @@ from multiprocessing import Pool
 from functools import partial
 import argparse
 from copy import deepcopy
+import random
+import numpy as np
 
 import sys
 sys.path.append(".")
@@ -17,7 +19,6 @@ from source import *
 def generate_data(datapoint_id,
                   data_directory, 
                   run_name,
-                  vacancy_percentage=0.5,
                   max_constraint_density=1.5,
                   max_badness_tolerated=0.1,
                   save_visualizations=False):
@@ -41,6 +42,8 @@ def generate_data(datapoint_id,
     Returns:
         None.
     """
+    random.seed(datapoint_id)
+    np.random.seed(datapoint_id)
     # define function to convert object to dictionary according to given specifications
     def obj_to_dict(obj):
         obj_dict = {
@@ -100,6 +103,7 @@ def generate_data(datapoint_id,
         # keep adding objects until over 
         objs = []
         scene_area = (scene_xmax - scene_xmin) * (scene_ymax - scene_ymin)
+        vacancy_percentage = np.random.uniform(low=0.3, high=0.5)
         area_to_occupy = (1-vacancy_percentage) * scene_area
         cur_occupied_area = 0
         obj_counter = 0
@@ -128,7 +132,7 @@ def generate_data(datapoint_id,
             problem.add_optimizable_object(obj)
             # add in dictionary form to initial_objs_output
             initial_objs_output.append(obj_to_dict(obj))
-            initial_objs_output = deepcopy(initial_objs_output)
+        initial_objs_output = deepcopy(initial_objs_output)
         num_objs = len(objs)
         objs = np.array(objs)
 
@@ -136,15 +140,7 @@ def generate_data(datapoint_id,
         if num_objs < 3:
             continue
 
-        # optionally setup plot
-        if save_visualizations:
-            fig, ax = plt.subplots(nrows=2, ncols=2, figsize=(12,12), subplot_kw={"projection": "3d"})
-            problem.plot_on_ax(ax=ax[0][0], ax_title="Unconstrained Objects (Perspective View)",
-                               elev=30, azim=40, persp=True)
-            problem.plot_on_ax(ax=ax[0][1], ax_title="Unconstrained Objects (Top View)",
-                               elev=90, azim=-90, persp=False)
-
-                # get number of constraints to add
+        # get number of constraints to add
         num_constraints = np.random.randint(low=num_objs, high=round(num_objs*max_constraint_density)+1) 
 
         # add the constraints (between random objects)
@@ -219,6 +215,11 @@ def generate_data(datapoint_id,
         if success:
             # optionally plot the final state and save figure
             if save_visualizations:
+                fig, ax = plt.subplots(nrows=2, ncols=2, figsize=(12,12), subplot_kw={"projection": "3d"})
+                problem.plot_on_ax(ax=ax[0][0], ax_title="Unconstrained Objects (Perspective View)",
+                                elev=30, azim=40, persp=True)
+                problem.plot_on_ax(ax=ax[0][1], ax_title="Unconstrained Objects (Top View)",
+                                elev=90, azim=-90, persp=False)
                 problem.plot_on_ax(ax=ax[1][0], ax_title="Solved Objects (Perspective View)",
                                    elev=30, azim=40, persp=True)
                 problem.plot_on_ax(ax=ax[1][1], ax_title="Solved Objects (Top View)",
@@ -254,7 +255,6 @@ def generate_dataset(num_workers: int, num_datapoints: int = 5, save_visualizati
     generate_func = partial(generate_data,
                             data_directory=data_directory,
                             run_name=run_name,
-                            vacancy_percentage=0.5,
                             max_constraint_density=1.5,
                             max_badness_tolerated=0.1,
                             save_visualizations=save_visualizations)
@@ -273,7 +273,8 @@ def generate_dataset(num_workers: int, num_datapoints: int = 5, save_visualizati
     else:
         with Pool(num_workers) as pool:
             dataset = list(tqdm(pool.imap(generate_func, range(num_datapoints)), total=num_datapoints))
-    import ipdb; ipdb.set_trace()
+
+    pickle.dump(dataset, open(os.path.join(data_directory, f"{run_name}.pkl"), "wb"))
 
 
 def parse_args():
