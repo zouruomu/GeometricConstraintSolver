@@ -15,6 +15,7 @@ from tqdm import tqdm
 import shutil
 import pickle
 from ..constraints import *
+from ..geometry import Cuboid
 from importlib import import_module
 
 """
@@ -60,5 +61,5 @@ def evaluate(objs_dict_list, constraints_dict_list, return_each_badness=False):
     total_badness = sum([v for k, v in avg_badness.items()])
 
     if return_each_badness:
-        return total_badness, each_badness
+        return total_badness, avg_badness
     return total_badness

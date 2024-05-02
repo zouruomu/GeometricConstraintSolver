@@ -1,9 +1,12 @@
 from .proximity import Proximity
 from .symmetry import Symmetry
-from .alignment import *
-from .target import *
-from .perpendicularity import *
-from .parallelism import *
-from .overlap import *
+from .alignment import TranslationalAlignment
+from .target import Target
+from .perpendicularity import Perpendicularity
+from .parallelism import Parallelism
+from .overlap import NoOverlap
 from .direction import Direction
 from .cover import Cover
+
+
+all_constraints = [Proximity, Symmetry, TranslationalAlignment, Target, Perpendicularity, Parallelism, NoOverlap, Direction, Cover]
