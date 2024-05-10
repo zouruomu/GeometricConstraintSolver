@@ -10,4 +10,4 @@ from .cover import Cover
 from .clearance import Clearance
 
 
-all_constraints = [Proximity, Symmetry, TranslationalAlignment, Target, Perpendicularity, Parallelism, NoOverlap, Direction, Cover]
+all_constraints = [Proximity, Symmetry, TranslationalAlignment, Target, Perpendicularity, Parallelism, NoOverlap, Direction, Cover, Clearance]
