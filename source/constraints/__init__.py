@@ -8,6 +8,7 @@ from .overlap import NoOverlap
 from .direction import Direction
 from .cover import Cover
 from .clearance import Clearance
+from .compositional.backtoback import BackToBack
 
 
-all_constraints = [Proximity, Symmetry, TranslationalAlignment, Target, Perpendicularity, Parallelism, NoOverlap, Direction, Cover, Clearance]
+all_constraints = [Proximity, Symmetry, TranslationalAlignment, Target, Perpendicularity, Parallelism, NoOverlap, Direction, Cover, Clearance, BackToBack]
